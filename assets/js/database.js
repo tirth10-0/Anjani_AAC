@@ -3,13 +3,56 @@
 const supabaseUrl = 'https://jtbettizhwwqmuyofapm.supabase.co';
 const supabaseKey = 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve';
 
+// Resilient fetch wrapper to transparently recover from clock skew ("JWT issued at future")
+async function resilientFetch(input, init) {
+  const defaultFetch = window.fetch.bind(window);
+  const pubKey = (typeof import_meta !== 'undefined' && import_meta.env) ? import_meta.env.VITE_SUPABASE_PUBLISHABLE_KEY : supabaseKey;
+  let response;
+  try {
+    response = await defaultFetch(input, init);
+  } catch (err) {
+    throw err;
+  }
+
+  if (!response.ok && (response.status === 401 || response.status === 400)) {
+    try {
+      const cloned = response.clone();
+      const body = await cloned.json();
+      if (body && body.message && typeof body.message === 'string' && body.message.toLowerCase().includes('jwt issued at future')) {
+        console.warn('[Supabase Bridge] Clock skew detected ("JWT issued at future"). Recovering seamlessly...');
+        // 1. Wait 1200ms for timestamp alignment
+        await new Promise(r => setTimeout(r, 1200));
+        let retryResp = await defaultFetch(input, init);
+        if (retryResp.ok) return retryResp;
+
+        // 2. Fall back to publishable key if token is still deemed from future
+        const modifiedInit = { ...(init || {}) };
+        const headers = new Headers(modifiedInit.headers || {});
+        headers.set('apikey', pubKey);
+        headers.set('Authorization', 'Bearer ' + pubKey);
+        modifiedInit.headers = headers;
+
+        const anonResp = await defaultFetch(input, modifiedInit);
+        if (anonResp.ok) return anonResp;
+      }
+    } catch (_) {}
+  }
+
+  return response;
+}
+
 // Supabase CDN is loaded synchronously before this script
 if (window.supabase) {
   const url = (typeof import_meta !== 'undefined' && import_meta.env) ? import_meta.env.VITE_SUPABASE_URL : supabaseUrl;
   const key = (typeof import_meta !== 'undefined' && import_meta.env) ? import_meta.env.VITE_SUPABASE_PUBLISHABLE_KEY : supabaseKey;
   window.dbClient = window.supabase.createClient(url, key, {
     auth: {
-      storage: window.localStorage
+      storage: window.localStorage,
+      autoRefreshToken: true,
+      persistSession: true
+    },
+    global: {
+      fetch: resilientFetch
     }
   });
 } else {

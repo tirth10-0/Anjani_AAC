@@ -102,7 +102,20 @@ async function loadOrders() {
       window.dbClient.from('order_items').select('*')
     ]);
 
-    if (ordersRes.error) throw ordersRes.error;
+    if (ordersRes.error) {
+      if (ordersRes.error.message && ordersRes.error.message.toLowerCase().includes('jwt issued at future')) {
+        console.warn('Clock drift detected on orders load. Retrying in 1.2s...');
+        await new Promise(r => setTimeout(r, 1200));
+        const retry = await window.dbClient.from('orders').select('*').order('id', { ascending: false });
+        if (!retry.error) {
+          ordersRes = retry;
+        } else {
+          throw ordersRes.error;
+        }
+      } else {
+        throw ordersRes.error;
+      }
+    }
 
     // 1. Process packaging & bottle stock
     if (!pkgRes.error && pkgRes.data) {
