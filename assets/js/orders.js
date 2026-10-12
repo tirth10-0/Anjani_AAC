@@ -6,6 +6,46 @@ let activeItemsStatusFilter = '';
 let allPackagingData = [];
 let allDetailedItems = [];
 
+function formatOrderNo(orderNo) {
+  if (!orderNo) return '—';
+  return String(orderNo).replace(/^DSP-/i, 'O-');
+}
+
+function extractUserNotes(notes) {
+  if (!notes) return '';
+  return String(notes)
+    .replace(/(?:^|\n\n?)(?:DISPATCH_META|Dispatch_meta):[\s\S]*$/i, '')
+    .trim();
+}
+
+async function getNextOrderNo() {
+  let maxNum = 0;
+  try {
+    const { data: dbOrders } = await window.dbClient.from('orders').select('order_no');
+    const orderList = dbOrders || allOrders || [];
+    for (let o of orderList) {
+      if (o.order_no) {
+        const m = String(o.order_no).match(/^(?:O|ORD|DSP)-(\d+)$/i);
+        if (m) {
+          const num = parseInt(m[1], 10);
+          if (num < 1000000 && num > maxNum) maxNum = num;
+        } else {
+          const num = UTILS.extractNumericPart(o.order_no);
+          if (num < 1000000 && num > maxNum) maxNum = num;
+        }
+      }
+    }
+  } catch (_) {
+    for (let o of allOrders) {
+      if (o.order_no) {
+        const num = UTILS.extractNumericPart(o.order_no);
+        if (num < 1000000 && num > maxNum) maxNum = num;
+      }
+    }
+  }
+  return 'O-' + String(maxNum + 1).padStart(2, '0');
+}
+
 function updatePageDebug(text, color) {
   const el = document.getElementById('debug-page-status');
   if (el) {
@@ -86,6 +126,7 @@ async function loadOrders() {
 
     allOrders = UTILS.sortLatestFirst(ordersRes.data || [], o => o.order_no || o.id);
     allOrders.forEach(o => {
+      o.order_no = formatOrderNo(o.order_no);
       o.client_display = clientMap.get(o.client_id) || o.client_name || '—';
     });
 
@@ -326,7 +367,7 @@ async function viewOrder(id) {
         <!-- Header Info -->
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
           <div>
-            <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: var(--text);">${o.order_no}</h3>
+            <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: var(--text);">${formatOrderNo(o.order_no)}</h3>
             <p style="margin: 3px 0 0; font-size: 12px; color: var(--text-muted);">Booked: ${UTILS.fmtDate(o.date)} ${o.due_date ? `| Due: ${UTILS.fmtDate(o.due_date)}` : ''}</p>
           </div>
           <div>${statusBadge}</div>
@@ -356,9 +397,9 @@ async function viewOrder(id) {
           </div>
         </div>
 
-        ${o.notes ? `
+        ${extractUserNotes(o.notes) ? `
           <div style="background: var(--bg); padding: 10px 12px; border-radius: 6px; font-size: 12px; color: var(--text-muted); border: 1px solid var(--border);">
-            <strong style="color:var(--text-secondary)">Notes:</strong> ${o.notes}
+            <strong style="color:var(--text-secondary)">Notes:</strong> ${extractUserNotes(o.notes)}
           </div>
         ` : ''}
 
@@ -401,6 +442,9 @@ async function openAdd() {
   document.getElementById('modal-title').textContent = 'New Sales Order';
   const orderForm = document.getElementById('order-form');
   orderForm.reset();
+  const nextOrderNo = await getNextOrderNo();
+  const orderNoField = document.getElementById('order-no-field');
+  if (orderNoField) orderNoField.value = nextOrderNo;
   const toggle = document.getElementById('auto-discount-toggle');
   if (toggle) toggle.checked = false;
   const gstSel = document.getElementById('gst-type-select');
@@ -428,16 +472,54 @@ async function openEdit(id) {
     if (o.status === 'Delivered') {
       o.status = 'Completed';
     }
+
+    // Parse dispatch metadata if present in notes to recover items metadata if needed
+    let dispatchMeta = null;
+    const rawNotes = o.notes || '';
+    if (/(?:DISPATCH_META|Dispatch_meta):/i.test(rawNotes)) {
+      try {
+        const jsonStr = rawNotes.replace(/^[\s\S]*?(?:DISPATCH_META|Dispatch_meta):/i, '').trim();
+        dispatchMeta = JSON.parse(jsonStr);
+      } catch (e) {
+        console.warn('Failed to parse dispatch metadata from notes:', e);
+      }
+    }
+
+    // Clean user notes for form display
+    o.notes = extractUserNotes(o.notes);
+
+    // Normalize order number from DSP- to O-
+    if (o.order_no) {
+      o.order_no = formatOrderNo(o.order_no);
+    }
+
     UTILS.populateForm('order-form', o);
+    const notesInp = document.querySelector('#order-form [name="notes"]');
+    if (notesInp) notesInp.value = o.notes || '';
+
+    const orderNoField = document.getElementById('order-no-field');
+    if (orderNoField && o.order_no) orderNoField.value = o.order_no;
+
     UTILS.applyDefaultDateInputs(document.getElementById('order-form'), { skipFieldNames: ['due_date'] });
     const toggle = document.getElementById('auto-discount-toggle');
     if (toggle) toggle.checked = false;
     handleAutoDiscount();
-    orderItems = (o.items || []).map(item => ({
-      ...item,
-      packaging_size: item.packaging_size || item.packing_size || '',
-      total: (parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)
-    }));
+
+    orderItems = (o.items || []).map(item => {
+      let q = parseFloat(item.quantity) || 0;
+      if (q <= 0 && dispatchMeta && Array.isArray(dispatchMeta.items_meta)) {
+        const metaMatch = dispatchMeta.items_meta.find(m => m.product_id == item.product_id || (m.product_name && String(m.product_name).toLowerCase().trim() === String(item.product_name).toLowerCase().trim()));
+        if (metaMatch) {
+          q = parseFloat(metaMatch.QUANTITY || metaMatch.quantity || metaMatch.TOTAL_UNITS || metaMatch.total_units || 0);
+        }
+      }
+      return {
+        ...item,
+        quantity: q > 0 ? q : 1,
+        packaging_size: item.packaging_size || item.packing_size || '',
+        total: (q > 0 ? q : 1) * (parseFloat(item.unit_price) || 0)
+      };
+    });
 
     // Restore GST type selector from stored tax %
     const taxVal = parseFloat(o.tax) || 0;
@@ -605,11 +687,11 @@ async function renderOrderItems() {
           </td>
           <td>
             <span class="mobile-label">Quantity</span>
-            <input type="number" class="form-input item-qty-input" value="${item.quantity}" onchange="onQtyChange(${idx}, this.value)">
+            <input type="number" class="form-input item-qty-input" value="${item.quantity}" min="0" step="any" oninput="onQtyChange(${idx}, this.value)" onchange="onQtyChange(${idx}, this.value)">
           </td>
           <td>
             <span class="mobile-label">Unit Price (₹)</span>
-            <input type="number" class="form-input item-price-input" value="${item.unit_price}" onchange="onUnitPriceChange(${idx}, this.value)">
+            <input type="number" class="form-input item-price-input" value="${item.unit_price}" min="0" step="any" oninput="onUnitPriceChange(${idx}, this.value)" onchange="onUnitPriceChange(${idx}, this.value)">
           </td>
           <td class="cell-amount item-total-display">
             <span class="mobile-label">Total</span>
@@ -861,19 +943,9 @@ async function saveOrder() {
   if (!d.client_id) { APP.showToast('Please select a client', 'error'); return; }
   if (orderItems.length === 0) { APP.showToast('Please add at least one item', 'error'); return; }
 
-  let finalOrderNo = d.order_no;
-  if (!finalOrderNo && !editingOrderId) {
-    let maxNum = 0;
-    for (let o of allOrders) {
-      if (o.order_no && o.order_no.startsWith('O-')) {
-        const numStr = o.order_no.substring(2);
-        if (/^\d+$/.test(numStr)) {
-          const num = parseInt(numStr, 10);
-          if (num < 1000000 && num > maxNum) maxNum = num;
-        }
-      }
-    }
-    finalOrderNo = 'O-' + String(maxNum + 1).padStart(2, '0');
+  let finalOrderNo = d.order_no ? formatOrderNo(d.order_no) : '';
+  if (!finalOrderNo) {
+    finalOrderNo = await getNextOrderNo();
   }
 
   const saveBtn = document.querySelector('#order-modal button.btn-primary');
@@ -897,37 +969,53 @@ async function saveOrder() {
     const boToggle = document.getElementById('allow-backorder-toggle');
     const isBackorderMode = boToggle && boToggle.checked;
 
-    const executeSave = async (allowBackorder = false) => {
-      // Sync latest live DOM values from form table to orderItems array
-      document.querySelectorAll('#order-items-tbody tr').forEach((row, idx) => {
-        if (orderItems[idx]) {
-          const prodSel = row.querySelector('.order-product-select');
-          if (prodSel && prodSel.value) {
-            orderItems[idx].product_id = prodSel.value;
-            const pObj = cachedProductsList.find(p => p.id == prodSel.value);
-            if (pObj) orderItems[idx].product_name = pObj.name;
-          }
-          const packSel = row.querySelector('.order-pack-select');
-          const packInput = row.querySelector('.order-pack-input');
-          if (packSel && packSel.value) {
-            orderItems[idx].packaging_size = packSel.value;
-          } else if (packInput && packInput.value) {
-            orderItems[idx].packaging_size = packInput.value;
-          }
-          const bottleSel = row.querySelector('.order-bottle-select');
-          if (bottleSel && bottleSel.value) {
-            orderItems[idx].bottle_inventory_id = parseInt(bottleSel.value);
-          } else {
-            orderItems[idx].bottle_inventory_id = null;
-          }
-          const qtyInp = row.querySelector('.item-qty-input');
-          if (qtyInp) orderItems[idx].quantity = parseFloat(qtyInp.value) || 0;
-          const priceInp = row.querySelector('.item-price-input');
-          if (priceInp) orderItems[idx].unit_price = parseFloat(priceInp.value) || 0;
-          orderItems[idx].total = (parseFloat(orderItems[idx].quantity) || 0) * (parseFloat(orderItems[idx].unit_price) || 0);
-
+    // Sync latest live DOM values from form table to orderItems array
+    document.querySelectorAll('#order-items-tbody tr').forEach((row, idx) => {
+      if (orderItems[idx]) {
+        const prodSel = row.querySelector('.order-product-select');
+        if (prodSel && prodSel.value) {
+          orderItems[idx].product_id = prodSel.value;
+          const pObj = cachedProductsList.find(p => p.id == prodSel.value);
+          if (pObj) orderItems[idx].product_name = pObj.name;
         }
-      });
+        const packSel = row.querySelector('.order-pack-select');
+        const packInput = row.querySelector('.order-pack-input');
+        if (packSel && packSel.value) {
+          orderItems[idx].packaging_size = packSel.value;
+        } else if (packInput && packInput.value) {
+          orderItems[idx].packaging_size = packInput.value;
+        }
+        const bottleSel = row.querySelector('.order-bottle-select');
+        if (bottleSel && bottleSel.value) {
+          orderItems[idx].bottle_inventory_id = parseInt(bottleSel.value);
+        } else {
+          orderItems[idx].bottle_inventory_id = null;
+        }
+        const qtyInp = row.querySelector('.item-qty-input');
+        if (qtyInp) orderItems[idx].quantity = parseFloat(qtyInp.value) || 0;
+        const priceInp = row.querySelector('.item-price-input');
+        if (priceInp) orderItems[idx].unit_price = parseFloat(priceInp.value) || 0;
+        orderItems[idx].total = (parseFloat(orderItems[idx].quantity) || 0) * (parseFloat(orderItems[idx].unit_price) || 0);
+      }
+    });
+
+    // Validate item quantities and products
+    for (let i = 0; i < orderItems.length; i++) {
+      const it = orderItems[i];
+      if (!it.product_id) {
+        APP.showToast(`Please select a product for item #${i + 1}`, 'error');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Order'; }
+        return;
+      }
+      const q = parseFloat(it.quantity) || 0;
+      if (q <= 0) {
+        APP.showToast(`Please enter a quantity greater than 0 for ${it.product_name || 'item #' + (i + 1)}`, 'error');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Order'; }
+        return;
+      }
+    }
+
+    const executeSave = async (allowBackorder = false) => {
 
       // Fetch latest inventory items for auto-matching fallback
       for (const item of orderItems) {
@@ -972,7 +1060,7 @@ async function saveOrder() {
           paid_amount: paidAmount,
           discount: discountPct,
           tax: taxPct,
-          notes: d.notes || ''
+          notes: d.notes ? d.notes.trim() : null
         };
         const { error: updErr } = await window.dbClient.from('orders').update(updateData).eq('id', editingOrderId);
         if (updErr) throw updErr;
@@ -995,7 +1083,7 @@ async function saveOrder() {
           paid_amount: paidAmount,
           discount: discountPct,
           tax: taxPct,
-          notes: d.notes || ''
+          notes: d.notes ? d.notes.trim() : null
         };
         const { data: newOrderData, error: insErr } = await window.dbClient.from('orders').insert([insertData]).select();
         if (insErr) throw insErr;
@@ -1085,6 +1173,9 @@ async function insertOrderItemsAndSyncStock(orderId, items, orderNo) {
   }
 
   for (const it of items) {
+    const qty = parseFloat(it.quantity) || 0;
+    const packMl = UTILS.parsePackSizeInMl(it.packaging_size || it.packing_size) || 1000;
+    const volumeLiters = (packMl / 1000) * qty;
 
     // 1. Deduct bottle stock if selected
     if (it.bottle_inventory_id && qty > 0) {
