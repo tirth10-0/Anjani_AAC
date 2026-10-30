@@ -133,8 +133,8 @@ const TOPBAR_HTML = (title, breadcrumb, logoUrl = getLogoUrl()) => `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
     </button>
     <div class="topbar-mobile-brand" onclick="window.location.href='dashboard.html'" role="button" tabindex="0" title="Go to Dashboard" style="cursor:pointer;">
-      <div class="topbar-logo" style="padding: 1px;">
-        <img src="${logoUrl}" alt="Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 2px;">
+      <div class="topbar-logo" style="width:28px; height:28px; border-radius:8px; overflow:hidden; background:#ffffff; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <img src="${logoUrl}" alt="Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
       </div>
       <span class="topbar-mobile-brand-name" id="topbar-mobile-brand-name">${getActiveCompanyName()}</span>
     </div>

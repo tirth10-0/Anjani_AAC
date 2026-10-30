@@ -2281,8 +2281,19 @@ body { overflow-x: hidden; }
     height: 28px !important;
     min-width: 28px !important;
     flex-shrink: 0 !important;
-    border-radius: 6px !important;
+    border-radius: 8px !important;
     overflow: hidden !important;
+    background: #ffffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .topbar-mobile-brand .topbar-logo img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    border-radius: 8px !important;
   }
 
   .topbar-mobile-brand span,
