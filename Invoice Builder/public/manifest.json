@@ -1,14 +1,22 @@
 {
-  "name": "Invoice Builder",
-  "short_name": "Invoice",
-  "description": "Professional Invoice Builder",
-  "start_url": "../",
+  "id": "./index.html",
+  "name": "Anjani Agri Care - Invoice Builder",
+  "short_name": "AAC Invoice",
+  "description": "Professional Billing & GST Invoice Builder for Anjani Agri Care.",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "background_color": "#0f172a",
-  "theme_color": "#08281A",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#0C3925",
   "categories": ["business", "finance"],
   "icons": [
+    {
+      "src": "favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "icon-192.png",
       "sizes": "192x192",
@@ -16,10 +24,22 @@
       "purpose": "any"
     },
     {
+      "src": "android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
       "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

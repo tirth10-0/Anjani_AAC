@@ -72,7 +72,7 @@ if (fs.existsSync(formIdx)) {
 ['sw.js', 'public/sw.js'].forEach(f => {
   if (!fs.existsSync(f)) return;
   let sw = fs.readFileSync(f, 'utf8');
-  sw = sw.replace(/const CACHE_NAME = '[^']*';/, `const CACHE_NAME = 'anjani-agri-care-erp-v3.1.0-rounded-logo';`);
+  sw = sw.replace(/const CACHE_NAME = '[^']*';/, `const CACHE_NAME = 'anjani-agri-care-erp-v3.2.0-pwa-fix';`);
   fs.writeFileSync(f, sw, 'utf8');
   console.log('Bumped cache in:', f);
 });

@@ -1,13 +1,13 @@
 {
-  "id": "./pages/dashboard.html?app=anjani-agri-care-erp",
+  "id": "./index.html",
   "name": "Anjani Agri Care ERP",
   "short_name": "Anjani Agri Care",
   "description": "Manufacturing, Inventory, Formulation and Operations Management System for Anjani Agri Care.",
-  "start_url": "./pages/dashboard.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0a0f0d",
+  "background_color": "#ffffff",
   "theme_color": "#0C3925",
   "categories": ["business", "productivity"],
   "icons": [

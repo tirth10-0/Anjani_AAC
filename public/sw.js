@@ -1,9 +1,16 @@
 // Anjani Agri Care ERP - Production Service Worker
 // Cache Name with Versioning
-const CACHE_NAME = 'anjani-agri-care-erp-v3.1.0-rounded-logo';
+const CACHE_NAME = 'anjani-agri-care-erp-v3.2.0-pwa-fix';
 
 const STATIC_ASSETS = [
+  './',
+  './index.html',
+  './login.html',
   './manifest.json',
+  './favicon.ico',
+  './favicon.png',
+  './apple-touch-icon.png',
+  './assets/images/logo.jpg',
   './assets/icons/icon-48x48.png',
   './assets/icons/icon-72x72.png',
   './assets/icons/icon-96x96.png',
@@ -20,7 +27,7 @@ const STATIC_ASSETS = [
   './assets/icons/favicon-16x16.png'
 ];
 
-// Install: Cache essential app icons & manifest, skip waiting to activate immediately
+// Install: Cache essential app icons, pages & manifest, skip waiting to activate immediately
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -49,8 +56,8 @@ self.addEventListener('activate', (event) => {
 
 // Fetch: Strategy tailored to ERP safety
 // 1. Supabase / Database / Auth / Mutations: Network-only, NEVER cached.
-// 2. Manifest & Icons: Network-first (update cache on success, cache fallback if offline).
-// 3. Other assets: Network-first to always ensure fresh ERP business logic.
+// 2. Manifest & Icons: Cache-first / Network-first fallback to ensure instantaneous 200 OK for WebAPK minter.
+// 3. Navigation & other assets: Network-first with guaranteed 200 OK fallback response.
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
@@ -65,11 +72,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For icons and manifest: Network-first with cache fallback
-  if (url.pathname.includes('/assets/icons/') || url.pathname.endsWith('manifest.json') || url.pathname.endsWith('favicon.ico')) {
+  // For icons and manifest: Cache-first with network background revalidation
+  if (url.pathname.includes('/assets/icons/') || url.pathname.endsWith('manifest.json') || url.pathname.endsWith('favicon.ico') || url.pathname.endsWith('favicon.png')) {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
           if (response && response.status === 200) {
             const responseClone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
@@ -77,14 +85,30 @@ self.addEventListener('fetch', (event) => {
             });
           }
           return response;
-        })
-        .catch(() => caches.match(request))
+        });
+      }).catch(() => fetch(request))
     );
     return;
   }
 
-  // All other ERP navigation / assets: Network-first
+  // All other ERP navigation / assets: Network-first with guaranteed Response
   event.respondWith(
-    fetch(request).catch(() => caches.match(request))
+    fetch(request)
+      .then((response) => {
+        return response;
+      })
+      .catch(async () => {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        // Navigation fallback (ensures WebAPK offline verification never receives undefined)
+        if (request.mode === 'navigate') {
+          const fallback = (await caches.match('./index.html')) || (await caches.match('./login.html'));
+          if (fallback) return fallback;
+        }
+        return new Response('Network offline. Please reconnect to access live ERP data.', {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      })
   );
 });
