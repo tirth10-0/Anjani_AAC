@@ -70,6 +70,14 @@ assert(responsiveCss.includes('.topbar-mobile-brand .topbar-logo') && responsive
 const ibIndex = fs.readFileSync('Invoice Builder/index.html', 'utf8');
 assert(!ibIndex.includes('border: 1px solid var(--border);flex-shrink:0;background:#ffffff;padding:2px;" onerror="this.onerror=null; this.src=\'logo.jpg\';"'), 'Invoice Builder index.html navbar-logo has no double border');
 
+// 4. Audit Removal of "Install App" button across all screen resolutions
+const sharedLayoutJs = fs.readFileSync('assets/js/shared-layout.js', 'utf8');
+assert(!sharedLayoutJs.includes('id="pwa-install-btn"'), 'Topbar HTML has no pwa-install-btn element');
+assert(!sharedLayoutJs.includes('id="user-install-app-btn"'), 'User dropdown has no user-install-app-btn');
+assert(!sharedLayoutJs.includes('id="pwa-install-modal"'), 'Layout has no pwa-install-modal overlay');
+assert(!sharedLayoutJs.includes('Install App'), 'Layout has no "Install App" button text');
+assert(!sharedLayoutJs.includes('setupPwaInstallButton'), 'Layout does not initialize any install buttons');
+
 console.log(`\n========================================`);
 console.log(`ROUNDED ICONS AUDIT: ${passed} / ${total} passed (${Math.round(passed/total * 100)}%)`);
 console.log(`========================================\n`);

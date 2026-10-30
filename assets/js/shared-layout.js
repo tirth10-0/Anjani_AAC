@@ -204,11 +204,6 @@ const TOPBAR_HTML = (title, breadcrumb, logoUrl = getLogoUrl()) => `
       <span class="btn-text">Invoice Builder</span>
     </a>
 
-    <button class="topbar-btn topbar-install-btn" id="pwa-install-btn" type="button" title="Install Anjani Agri Care App" aria-label="Install App" style="display:none; align-items:center; gap:6px; background:#0C3925; color:#ffffff !important; border:none; padding:7px 12px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      <span class="btn-text">Install App</span>
-    </button>
-
     <!-- System Notifications Center Dropdown -->
     <div class="dropdown topbar-notif-dropdown" style="position:relative;">
       <button class="topbar-notif-btn" id="notif-center-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="System Notifications" style="position:relative; background:transparent; border:none; padding:8px 10px; cursor:pointer; color:var(--text-primary); display:flex; align-items:center; border-radius:6px;">
@@ -237,10 +232,6 @@ const TOPBAR_HTML = (title, breadcrumb, logoUrl = getLogoUrl()) => `
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-muted)"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="dropdown-menu" id="user-dropdown" role="menu" aria-label="User menu" style="min-width: 140px; padding: 4px;">
-        <button class="dropdown-item" id="user-install-app-btn" type="button" role="menuitem" onclick="if(window.triggerPwaInstall) window.triggerPwaInstall();" style="display:flex; align-items:center; gap:8px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Install App
-        </button>
-        <div class="dropdown-divider" style="margin:4px 0; height:1px; background:var(--border, #e2e8f0); border:none;"></div>
         <button class="dropdown-item dropdown-item-danger" id="user-logout-btn" type="button" role="menuitem">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Logout
         </button>
@@ -250,34 +241,6 @@ const TOPBAR_HTML = (title, breadcrumb, logoUrl = getLogoUrl()) => `
 </header>`;
 
 const CONFIRM_MODAL = `
-<div class="modal-overlay" id="pwa-install-modal" style="display:none; z-index:99999;">
-  <div class="modal" style="max-width:440px; border-radius:16px; padding:20px; background:#ffffff; box-shadow:0 20px 40px rgba(0,0,0,0.2); box-sizing:border-box;">
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
-      <div style="width:44px; height:44px; border-radius:10px; background:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.08); display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0;">
-        <img src="${getLogoUrl()}" alt="Logo" style="width:100%; height:100%; object-fit:contain; border-radius:8px;">
-      </div>
-      <div>
-        <h3 style="margin:0; font-size:16px; font-weight:800; color:#0C3925;">Install Anjani Agri Care App</h3>
-        <p style="margin:2px 0 0 0; font-size:12px; color:#64748b;">Direct Mobile & Desktop Installation</p>
-      </div>
-    </div>
-    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; margin-bottom:16px; font-size:13px; line-height:1.5; color:#1e293b;">
-      <p style="margin:0 0 8px 0; font-weight:700; color:#0C3925;">📱 Install on Android / Chrome:</p>
-      <ol style="margin:0; padding-left:20px;">
-        <li style="margin-bottom:4px;">Tap Chrome's 3-dot menu (<strong>⋮</strong> in top-right corner).</li>
-        <li style="margin-bottom:4px;">Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong>.</li>
-        <li>Tap <strong>"Add" / "Install"</strong>. The app will install instantly on your home screen.</li>
-      </ol>
-      <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #cbd5e1;">
-        <p style="margin:0 0 4px 0; font-weight:700; color:#0C3925;">🍏 On iPhone / Safari:</p>
-        <p style="margin:0;">Tap the <strong>Share</strong> button (⎋), then scroll and tap <strong>"Add to Home Screen"</strong> (+).</p>
-      </div>
-    </div>
-    <div style="display:flex; gap:10px; justify-content:flex-end;">
-      <button class="btn btn-primary" type="button" onclick="document.getElementById('pwa-install-modal').style.display='none'" style="background:#0C3925; color:#ffffff; font-weight:700; border-radius:8px; padding:8px 20px; border:none; cursor:pointer;">Got It</button>
-    </div>
-  </div>
-</div>
 <div class="modal-overlay" id="confirm-modal">
   <div class="modal" style="max-width:420px">
     <div class="modal-header"><span class="modal-title">Confirm Action</span></div>
@@ -539,9 +502,6 @@ function injectLayout(title, breadcrumb) {
     });
     window._sidebarBeforeUnloadAttached = true;
   }
-
-  // Setup PWA install button handler
-  setupPwaInstallButton();
 
   // Initialize Multi-Company Switcher Dropdown
   initCompanySwitcher();
@@ -945,63 +905,6 @@ function initUserDropdown() {
     };
   }
 }
-
-let deferredPwaPrompt = null;
-
-window.showPwaInstallGuide = function() {
-  const modal = document.getElementById('pwa-install-modal');
-  if (modal) {
-    modal.style.display = 'flex';
-  } else {
-    alert("To install Anjani Agri Care ERP on Android:\n1. Tap the 3-dot menu (⋮) in Chrome.\n2. Tap 'Add to Home screen' or 'Install app'.\n3. Tap 'Install'.");
-  }
-};
-
-window.triggerPwaInstall = async function() {
-  if (deferredPwaPrompt) {
-    try {
-      deferredPwaPrompt.prompt();
-      const choice = await deferredPwaPrompt.userChoice;
-      if (choice && choice.outcome === 'accepted') {
-        const btn = document.getElementById('pwa-install-btn');
-        if (btn) btn.style.display = 'none';
-      }
-    } catch (err) {
-      console.warn('Install prompt error:', err);
-      window.showPwaInstallGuide();
-    }
-    deferredPwaPrompt = null;
-  } else {
-    window.showPwaInstallGuide();
-  }
-};
-
-function setupPwaInstallButton() {
-  const installBtn = document.getElementById('pwa-install-btn');
-  if (!installBtn) return;
-
-  if (deferredPwaPrompt) {
-    installBtn.style.display = 'inline-flex';
-  }
-
-  installBtn.onclick = () => window.triggerPwaInstall();
-}
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPwaPrompt = e;
-  const installBtn = document.getElementById('pwa-install-btn');
-  if (installBtn) {
-    installBtn.style.display = 'inline-flex';
-  }
-});
-
-window.addEventListener('appinstalled', () => {
-  const installBtn = document.getElementById('pwa-install-btn');
-  if (installBtn) installBtn.style.display = 'none';
-  deferredPwaPrompt = null;
-  console.log('Anjani Agri Care ERP installed successfully!');
-});
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
