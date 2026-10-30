@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <style id="anti-fouc">
+    html { visibility: hidden; }
+    html.css-ready { visibility: visible; }
+  </style>
+  <script>
+    (function(){
+      function reveal(){ document.documentElement.classList.add('css-ready'); }
+      window.addEventListener('load', reveal);
+      setTimeout(reveal, 700);
+    })();
+  </script>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjani Agri Care ERP - Companies & Branches</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="../assets/css/style.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/forms.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/tables.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/responsive.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/components/search-select.css?v=1792916877412">
+  <meta name="theme-color" content="#0C3925">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Anjani Agri Care">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="../manifest.json">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../assets/icons/apple-touch-icon.png">
+</head>
+<body>
+<div class="app-layout" id="app-layout">
+  <script src="../assets/js/tenant-context.js?v=1792916877412"></script>
+  <script src="../assets/js/rbac-context.js?v=1792916877412"></script>
+  <script src="../assets/js/shared-layout.js?v=1792916877412"></script>
+  <script>document.addEventListener('DOMContentLoaded',()=>LAYOUT.injectLayout('Companies & Branches','Enterprise / Companies'))</script>
+  <main class="main-content" id="main-content">
+    <div class="page-body">
+      <div class="page-header">
+        <div class="page-header-left">
+          <h2>Companies & Branches</h2>
+          <p>Manage legal entities, operational branches, and multi-company access</p>
+        </div>
+        <div class="page-header-right">
+          <button class="btn btn-primary" onclick="openAddCompany()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Company
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Cards -->
+      <div class="summary-cards-grid" id="companies-summary-grid">
+        <div class="summary-metric-card">
+          <div class="summary-metric-label">Total Companies</div>
+          <div class="summary-metric-value" id="stat-total-companies">0</div>
+        </div>
+        <div class="summary-metric-card">
+          <div class="summary-metric-label">Manufacturers</div>
+          <div class="summary-metric-value" style="color:#0C3925;" id="stat-mfg-companies">0</div>
+        </div>
+        <div class="summary-metric-card">
+          <div class="summary-metric-label">Trading / Retail</div>
+          <div class="summary-metric-value" style="color:#0e7490;" id="stat-trading-companies">0</div>
+        </div>
+        <div class="summary-metric-card">
+          <div class="summary-metric-label">Total Branches</div>
+          <div class="summary-metric-value" id="stat-total-branches">0</div>
+        </div>
+      </div>
+
+      <div class="table-wrap data-table-wrap-mobile" id="companies-table-wrap">
+        <div class="table-toolbar" id="companies-table-toolbar">
+          <div class="table-toolbar-left" id="companies-toolbar-left">
+            <div class="table-search" id="companies-search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input id="search-input" placeholder="Search companies by name, code, or GSTIN…">
+            </div>
+            <select class="form-select" id="company-status-filter" onchange="filterAndRenderCompanies()">
+              <option value="ALL">All Statuses</option>
+              <option value="ACTIVE" selected>Active Only</option>
+              <option value="ARCHIVED">Archived Only</option>
+            </select>
+          </div>
+          <div class="table-toolbar-right" id="companies-toolbar-right"><span class="text-sm text-muted" id="total-info">Loading...</span></div>
+        </div>
+        <table class="data-table" id="companies-table">
+          <thead>
+            <tr>
+              <th style="width:8%">Code</th>
+              <th style="width:22%">Company Legal Name</th>
+              <th style="width:10%">Entity Type</th>
+              <th style="width:13%">GSTIN</th>
+              <th style="width:10%">Location</th>
+              <th style="width:11%">Branches & WH</th>
+              <th style="width:8%">Status</th>
+              <th style="width:18%;text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="8"><div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal: Add / Edit Company -->
+<div class="modal-overlay" id="company-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="company-modal-title">New Company</span>
+      <button class="modal-close" onclick="APP.closeModal('company-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <form id="company-form" onsubmit="return false">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Company Legal Name <span class="required">*</span></label>
+            <input class="form-input" name="name" required placeholder="e.g. Anjani Agri Care or Company A">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Company Code <span class="required">*</span></label>
+            <input class="form-input" name="code" required placeholder="e.g. E or CO-A" style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Entity Type</label>
+            <select class="form-select" name="is_manufacturing">
+              <option value="true" selected>Manufacturer (Production, Batches, Formulations)</option>
+              <option value="false">Distributor / Retailer / Sister Concern</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">GSTIN</label>
+            <input class="form-input" name="gstin" placeholder="24AAACA0000A1Z5" style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label class="form-label">PAN</label>
+            <input class="form-input" name="pan" placeholder="AAACA0000A" style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input class="form-input" name="email" type="email" placeholder="contact@company.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input class="form-input" name="phone" placeholder="98765 43210">
+          </div>
+          <div class="form-group">
+            <label class="form-label">City</label>
+            <input class="form-input" name="city" placeholder="Rajkot">
+          </div>
+          <div class="form-group">
+            <label class="form-label">State</label>
+            <input class="form-input" name="state" placeholder="Gujarat">
+          </div>
+          <div class="form-group form-col-full">
+            <label class="form-label">Registered Office Address</label>
+            <textarea class="form-textarea" name="address" rows="2" placeholder="Full address"></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="APP.closeModal('company-modal')">Cancel</button>
+      <button class="btn btn-primary" id="save-company-btn" onclick="saveCompany()">Save Company</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Manage Branches for Company -->
+<div class="modal-overlay" id="branches-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="branches-modal-title">Company Branches</span>
+      <button class="modal-close" onclick="APP.closeModal('branches-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="branches-modal-subhead">
+        <p class="branches-modal-desc">Manage physical factory, office, and depot branches.</p>
+        <button class="btn btn-primary btn-sm btn-add-branch" onclick="openAddBranch()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Branch
+        </button>
+      </div>
+      <div id="branches-list-wrap">
+        <div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div>
+      </div>
+
+      <!-- Add Branch Inline Form (hidden by default) -->
+      <form id="branch-form" class="branch-inline-form" style="display:none;" onsubmit="return false">
+        <h4 style="margin:0 0 12px;font-size:14px;" id="branch-form-title">New Branch Location</h4>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Branch Name <span class="required">*</span></label>
+            <input class="form-input" name="branch_name" required placeholder="e.g. Main Plant or Gondal Depot">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Branch Code <span class="required">*</span></label>
+            <input class="form-input" name="branch_code" required placeholder="e.g. BR-01" style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label class="form-label">City</label>
+            <input class="form-input" name="branch_city" placeholder="Rajkot">
+          </div>
+          <div class="form-group">
+            <label class="form-label">State</label>
+            <input class="form-input" name="branch_state" placeholder="Gujarat">
+          </div>
+          <div class="form-group form-col-full">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+              <input type="checkbox" name="is_head_office" value="true">
+              <strong>Mark as Head Office / Principal Location</strong>
+            </label>
+          </div>
+        </div>
+        <div class="branch-form-actions">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="cancelBranchForm()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="saveBranch()">Save Branch</button>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="APP.closeModal('branches-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Dependency Warning & Safe Archival -->
+<div class="modal-overlay" id="company-dependency-modal">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--danger,#ef4444);display:flex;align-items:center;gap:6px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Permanent Deletion Blocked
+      </span>
+      <button class="modal-close" onclick="APP.closeModal('company-dependency-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" style="padding:18px;">
+      <p style="font-size:13.5px;color:var(--text-primary);margin-bottom:12px;" id="company-dependency-msg">
+        This company cannot be deleted because dependent business records exist.
+      </p>
+      <div id="company-dependency-list" style="background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12.5px;line-height:1.6;margin-bottom:14px;">
+        <!-- Dynamically populated dependencies -->
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);margin:0;" id="company-dependency-subtext">
+        <strong>Recommendation:</strong> Archive this company to deactivate it from operational workflows while permanently preserving historical invoices, transactions, and audit trails.
+      </p>
+    </div>
+    <div class="modal-footer" id="company-dependency-footer" style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-secondary" onclick="APP.closeModal('company-dependency-modal')">Cancel</button>
+      <button class="btn btn-warning" id="btn-company-archive" style="display:none;background:#d97706;border-color:#b45309;color:#fff;">
+        Archive Company (Recommended)
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/database.js?v=1792916877412"></script>
+<script src="../assets/js/audit-logger.js?v=1792916877412"></script>
+<script src="../assets/js/tenant-context.js?v=1792916877412"></script>
+<script src="../assets/js/utils.js?v=1792916877412"></script>
+<script src="../assets/js/components/search-select.js?v=1792916877412"></script>
+<script src="../assets/js/app.js?v=1792916877412"></script>
+<script src="../assets/js/companies.js?v=1792916877412"></script>
+</body>
+</html>

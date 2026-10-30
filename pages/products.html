@@ -21,25 +21,30 @@
     })();
   </script>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Anjani Crop Care ERP - Products</title>
+  <title>Anjani Agri Care ERP - Products</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="manifest" href="../manifest.json">
+  <link rel="stylesheet" href="../assets/css/style.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/forms.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/tables.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/responsive.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/components/search-select.css?v=1792916877412">
   <meta name="theme-color" content="#0C3925">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Anjani Agri Care">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="../manifest.json">
-  <meta name="theme-color" content="#0C3925">
-  <link rel="stylesheet" href="../assets/css/style.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/forms.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/tables.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/responsive.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/components/search-select.css?v=1791542792536">
-    <link rel="icon" type="image/png" href="../assets/images/logo.png">
-  <link rel="apple-touch-icon" href="../assets/images/logo.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../assets/icons/apple-touch-icon.png">
 </head>
 <body>
 <div class="app-layout" id="app-layout">
-  <script src="../assets/js/shared-layout.js?v=1791542792536"></script>
+  <script src="../assets/js/tenant-context.js?v=1792916877412"></script>
+  <script src="../assets/js/rbac-context.js?v=1792916877412"></script>
+  <script src="../assets/js/shared-layout.js?v=1792916877412"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>LAYOUT.injectLayout('Products','Products'))</script>
 
   <main class="main-content" id="main-content">
@@ -59,7 +64,7 @@
       <div class="table-wrap data-table-wrap-mobile" id="products-table-wrap">
         <div class="table-toolbar">
           <div class="table-toolbar-left">
-            <div class="table-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="search-input" type="search" placeholder="Search products, batch, brand, category…"></div>
+            <div class="table-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="search-input" type="search" placeholder="Search products, batch, brand, category…"></div>
             <div class="table-filters cat-pill-filters" id="cat-pill-filters">
               <button type="button" class="cat-pill active" data-cat="">All</button>
               <button type="button" class="cat-pill" data-cat="Insecticides">Insecticides</button>
@@ -73,9 +78,9 @@
         <table class="data-table" id="products-table">
           <thead><tr>
             
-            <th style="width: 18%;">Product Name</th><th>Batch No</th><th>Brand</th><th>Category</th><th>Toxicity</th><th>Purchase Price (₹)</th><th>Selling Price (₹)</th><th>Actions</th>
+            <th style="width: 22%;">Product Name</th><th>Brand</th><th>Category</th><th>Toxicity</th><th>Purchase Price (₹)</th><th>Selling Price (₹)</th><th>Actions</th>
           </tr></thead>
-          <tbody><tr><td colspan="9"><div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div></td></tr></tbody>
+          <tbody><tr><td colspan="8"><div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div></td></tr></tbody>
         </table>
         <div class="pagination"></div>
       </div>
@@ -83,7 +88,7 @@
       <div class="table-wrap data-table-wrap-mobile" id="packaging-table-wrap" style="display:none">
         <div class="table-toolbar">
           <div class="table-toolbar-left">
-            <div class="table-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="packaging-search-input" placeholder="Search by product…"></div>
+            <div class="table-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="packaging-search-input" placeholder="Search by product…"></div>
           </div>
           <div class="table-toolbar-right"><span class="text-sm text-muted" id="packaging-total-info">Loading...</span></div>
         </div>
@@ -139,7 +144,7 @@
               <p>Optional technical and descriptive details.</p>
             </div>
             <div class="form-grid product-form-grid">
-              <div class="form-group"><label class="form-label">Batch No</label><input class="form-input" name="batch_no" placeholder="e.g. B2026-001"></div>
+
               <div class="form-group form-col-full"><label class="form-label">Technical Composition</label><input class="form-input" name="composition" placeholder="e.g. Chlorpyrifos 20%"></div>
               <div class="form-group form-col-full"><label class="form-label">Description</label><textarea class="form-textarea" name="description" rows="2" placeholder="Product description..."></textarea></div>
             </div>
@@ -242,9 +247,12 @@
   </div>
 </div>
 
-<script src="../assets/js/database.js?v=1791542792536"></script>
-<script src="../assets/js/utils.js?v=1791542792536"></script>
-<script src="../assets/js/components/search-select.js?v=1791542792536"></script>
-<script src="../assets/js/app.js?v=1791542792536"></script><script src="../assets/js/products.js?v=1791542792536"></script>
+<script src="../assets/js/database.js?v=1792916877412"></script>
+<script src="../assets/js/inventory-core.js?v=1792916877412"></script>
+<script src="../assets/js/packaging-core.js?v=1792916877412"></script>
+<script src="../assets/js/utils.js?v=1792916877412"></script>
+<script src="../assets/js/components/search-select.js?v=1792916877412"></script>
+<script src="../assets/js/app.js?v=1792916877412"></script>
+<script src="../assets/js/products.js?v=1792916877412"></script>
 </body></html>
 

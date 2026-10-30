@@ -1,9 +1,9 @@
 /* assets/js/database.js - Supabase Bridge Config */
 
-const supabaseUrl = 'https://jtbettizhwwqmuyofapm.supabase.co';
-const supabaseKey = 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve';
+const supabaseUrl = 'https://galqhecdkeskvgnxjsax.supabase.co';
+const supabaseKey = 'sb_publishable_bSLDWrI4YHYCshblzkiKHw_04XepecY';
 
-// Resilient fetch wrapper to transparently recover from clock skew ("JWT issued at future")
+// Resilient fetch wrapper to transparently recover from clock skew, expired JWTs, or auth failures
 async function resilientFetch(input, init) {
   const defaultFetch = window.fetch.bind(window);
   const pubKey = (typeof import_meta !== 'undefined' && import_meta.env) ? import_meta.env.VITE_SUPABASE_PUBLISHABLE_KEY : supabaseKey;
@@ -14,18 +14,24 @@ async function resilientFetch(input, init) {
     throw err;
   }
 
-  if (!response.ok && (response.status === 401 || response.status === 400)) {
+  if (!response.ok && (response.status === 401 || response.status === 400 || response.status === 403)) {
     try {
       const cloned = response.clone();
-      const body = await cloned.json();
-      if (body && body.message && typeof body.message === 'string' && body.message.toLowerCase().includes('jwt issued at future')) {
-        console.warn('[Supabase Bridge] Clock skew detected ("JWT issued at future"). Recovering seamlessly...');
-        // 1. Wait 1200ms for timestamp alignment
-        await new Promise(r => setTimeout(r, 1200));
-        let retryResp = await defaultFetch(input, init);
-        if (retryResp.ok) return retryResp;
+      const body = await cloned.json().catch(() => ({}));
+      const msg = String(body?.message || body?.details || body?.error_description || body?.error || '').toLowerCase();
+      const isAuthError = response.status === 401 || response.status === 403 || msg.includes('jwt') || msg.includes('token') || msg.includes('unauthorized') || msg.includes('claim') || msg.includes('key');
 
-        // 2. Fall back to publishable key if token is still deemed from future
+      if (isAuthError) {
+        if (msg.includes('jwt issued at future')) {
+          console.warn('[Supabase Bridge] Clock skew detected ("JWT issued at future"). Recovering seamlessly...');
+          // 1. Wait 1200ms for timestamp alignment
+          await new Promise(r => setTimeout(r, 1200));
+          let retryResp = await defaultFetch(input, init);
+          if (retryResp.ok) return retryResp;
+        }
+
+        console.warn('[Supabase Bridge] Auth failure (' + (body?.message || response.status) + '). Retrying anonymously with pubKey...');
+        // Fall back to publishable key if token is expired, invalid, or rejected
         const modifiedInit = { ...(init || {}) };
         const headers = new Headers(modifiedInit.headers || {});
         headers.set('apikey', pubKey);
@@ -33,13 +39,24 @@ async function resilientFetch(input, init) {
         modifiedInit.headers = headers;
 
         const anonResp = await defaultFetch(input, modifiedInit);
-        if (anonResp.ok) return anonResp;
+        if (anonResp.ok) {
+          try {
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+              const k = localStorage.key(i);
+              if (k && (k.startsWith('sb-') && k.endsWith('-auth-token'))) {
+                localStorage.removeItem(k);
+              }
+            }
+          } catch (_) {}
+          return anonResp;
+        }
       }
     } catch (_) {}
   }
 
   return response;
 }
+window.resilientFetch = resilientFetch;
 
 // Supabase CDN is loaded synchronously before this script
 if (window.supabase) {
@@ -55,6 +72,9 @@ if (window.supabase) {
       fetch: resilientFetch
     }
   });
+  if (typeof window !== 'undefined' && window.TENANT_CONTEXT && window.TENANT_CONTEXT.init) {
+    window.TENANT_CONTEXT.init(true).catch(() => {});
+  }
 } else {
   console.error("Supabase CDN script not loaded!");
 }
@@ -267,7 +287,7 @@ window.INVENTORY_SERVICE = {
           }) || matches[0];
 
           if (techMatch && productId) {
-            window.dbClient.from('products').update({ inventory_item_id: techMatch.id }).eq('id', productId).catch(() => {});
+            window.dbClient.from('products').update({ inventory_item_id: techMatch.id }).eq('id', productId).then(null, () => {});
           }
           this._techCache.set(cacheKey, techMatch);
           return techMatch;
@@ -292,7 +312,7 @@ window.INVENTORY_SERVICE = {
             }) || fuzzyMatches[0];
 
             if (bestMatch && productId) {
-              window.dbClient.from('products').update({ inventory_item_id: bestMatch.id }).eq('id', productId).catch(() => {});
+              window.dbClient.from('products').update({ inventory_item_id: bestMatch.id }).eq('id', productId).then(null, () => {});
             }
             this._techCache.set(cacheKey, bestMatch);
             return bestMatch;

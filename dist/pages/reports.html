@@ -8,132 +8,831 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <style id="anti-fouc">
-    /* Anti-FOUC: hide body until local CSS fully paints */
     html { visibility: hidden; }
     html.css-ready { visibility: visible; }
-    /* Safety fallback: always show after 600ms no matter what */
   </style>
   <script>
     (function(){
-      /* Reveal as soon as all local stylesheets are done loading */
       function reveal(){ document.documentElement.classList.add('css-ready'); }
-      /* Wait for every local link[rel=stylesheet] in this document */
       window.addEventListener('load', reveal);
-      /* Fallback: 700ms hard cap so network issues don't freeze the screen */
       setTimeout(reveal, 700);
     })();
   </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Anjani Crop Care ERP — Reports & Analytics</title>
+  <title>Anjani Agri Care ERP — Reports & Analytics</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js?v=1791784991612" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="manifest" href="/assets/manifest-Di0Youpr.json">
-  <meta name="theme-color" content="#0C3925">
-    <link rel="icon" type="image/png" href="/assets/logo-d20ZjoY5.png">
-  <link rel="apple-touch-icon" href="/assets/logo-d20ZjoY5.png">
-  <link rel="stylesheet" crossorigin href="/assets/style-DVrNU6sJ.css">
-  <link rel="stylesheet" crossorigin href="/assets/dashboard-mQ7gMUI0.css">
-  <link rel="stylesheet" crossorigin href="/assets/search-select-DLSzEhD1.css">
+  <style>
+    .report-filter-bar {
+      background: var(--surface, #ffffff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .report-filter-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border, #f1f5f9);
+    }
+    .report-filter-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+    }
+    .report-active-range-badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #0C3925;
+      background: #eaf2ec;
+      border: 1px solid #c2decb;
+      padding: 3px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .preset-pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    .preset-pill-row .cat-pill {
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border, #cbd5e1);
+      background: #ffffff;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      box-sizing: border-box;
+    }
+    .preset-pill-row .cat-pill:hover:not(.active) {
+      background: #f8fafc;
+      border-color: #94a3b8;
+      color: #0f172a;
+    }
+    .preset-pill-row .cat-pill.active {
+      background: #0C3925 !important;
+      color: #ffffff !important;
+      border-color: #0C3925 !important;
+      font-weight: 700 !important;
+      box-shadow: 0 2px 4px rgba(12, 57, 37, 0.2) !important;
+    }
+    .report-dates-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      width: 100%;
+    }
+    .filter-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .filter-input-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted, #64748b);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 2px;
+    }
+    .filter-input-group .form-input,
+    .filter-input-group .form-select {
+      width: 100%;
+      height: 38px;
+      padding: 0 10px;
+      font-size: 12.5px;
+      border-radius: 6px;
+      border: 1px solid var(--border, #cbd5e1);
+      box-sizing: border-box;
+      background: #ffffff;
+      color: #0f172a;
+    }
+    .advanced-filters-section {
+      width: 100%;
+      border-top: 1px dashed var(--border, #e2e8f0);
+      padding-top: 12px;
+    }
+    .advanced-filters-toggle-btn {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-size: 12px;
+      font-weight: 600;
+      color: #334155;
+      box-sizing: border-box;
+    }
+    .advanced-filters-toggle-btn:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    .toggle-btn-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .filter-icon {
+      width: 14px;
+      height: 14px;
+      color: #0C3925;
+    }
+    .chevron-icon {
+      width: 16px;
+      height: 16px;
+      color: #64748b;
+      transition: transform 0.2s ease;
+    }
+    .active-filters-count-badge {
+      font-size: 10.5px;
+      font-weight: 700;
+      background: #0C3925;
+      color: #ffffff;
+      padding: 1px 7px;
+      border-radius: 999px;
+      line-height: 1.3;
+    }
+    .advanced-filters-body {
+      margin-top: 12px;
+    }
+    .advanced-filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      width: 100%;
+    }
+    .report-filter-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding-top: 4px;
+    }
+    .report-filter-actions .btn {
+      height: 38px;
+      padding: 0 16px;
+      font-size: 12.5px;
+      font-weight: 600;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-sizing: border-box;
+    }
+    .report-filter-actions .btn-primary {
+      background: #0C3925;
+      border: 1px solid #0C3925;
+      color: #ffffff;
+      flex: 1;
+    }
+    .report-filter-actions .btn-secondary {
+      background: #ffffff;
+      border: 1px solid var(--border, #cbd5e1);
+      color: #334155;
+    }
+    .report-filter-actions .btn-secondary:hover {
+      background: #f8fafc;
+      color: #0f172a;
+    }
+
+    /* Reports Tabs */
+    .reports-tabs,
+    #reports-tabs {
+      display: flex !important;
+      gap: 10px !important;
+      flex-wrap: wrap !important;
+      width: 100% !important;
+      margin-bottom: 20px !important;
+      border-bottom: none !important;
+      padding-bottom: 0 !important;
+    }
+    .reports-tabs .tab-btn,
+    #reports-tabs .tab-btn {
+      flex: 0 0 190px !important;
+      width: 190px !important;
+      min-width: 190px !important;
+      max-width: 190px !important;
+      height: 42px !important;
+      min-height: 42px !important;
+      max-height: 42px !important;
+      padding: 4px 8px !important;
+      font-size: 12.5px !important;
+      font-weight: 600 !important;
+      line-height: 1.25 !important;
+      text-align: center !important;
+      justify-content: center !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      white-space: normal !important;
+      word-break: break-word !important;
+      overflow-wrap: break-word !important;
+      box-sizing: border-box !important;
+      border-radius: 8px !important;
+      border: 1px solid var(--border, #cbd5e1) !important;
+      background: #ffffff !important;
+      color: #475569 !important;
+      cursor: pointer !important;
+      transition: all 0.15s ease !important;
+      margin: 0 !important;
+    }
+    .reports-tabs .tab-btn:hover:not(.active),
+    #reports-tabs .tab-btn:hover:not(.active) {
+      background: #f8fafc !important;
+      color: #0f172a !important;
+      border-color: #94a3b8 !important;
+    }
+    .reports-tabs .tab-btn.active,
+    #reports-tabs .tab-btn.active {
+      background: #0C3925 !important;
+      color: #ffffff !important;
+      border-color: #0C3925 !important;
+      font-weight: 700 !important;
+    }
+
+    /* Top Summary Products & Clients Left-Aligned Stack */
+    .top-product-info,
+    .top-client-info {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      text-align: left;
+      gap: 3px;
+      width: 100%;
+    }
+    .top-product-name,
+    .top-client-name {
+      font-weight: 600;
+      color: #0f172a;
+      line-height: 1.35;
+      text-align: left;
+      word-break: break-word;
+      font-size: 12.5px;
+    }
+    .top-product-pack {
+      display: inline-block;
+      font-size: 10.5px;
+      font-weight: 500;
+      color: #475569;
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 1px 6px;
+      text-align: left;
+      align-self: flex-start;
+      line-height: 1.3;
+    }
+    .top-client-city {
+      display: inline-block;
+      font-size: 11px;
+      color: var(--text-muted, #64748b);
+      text-align: left;
+      line-height: 1.3;
+    }
+
+    .sku-pill {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.06);
+      margin: 2px 4px 2px 0;
+      white-space: nowrap;
+    }
+    .kpi-row-compact {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .export-dropdown-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    /* Mobile Responsive Overrides */
+    @media (max-width: 768px) {
+      .page-body {
+        padding-bottom: 80px !important;
+      }
+      .report-filter-bar {
+        padding: 14px !important;
+        gap: 12px !important;
+      }
+      .preset-pill-row,
+      #report-date-presets {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+        width: 100% !important;
+      }
+      .preset-pill-row .cat-pill,
+      #report-date-presets .cat-pill {
+        width: 100% !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        padding: 0 4px !important;
+        font-size: 11.5px !important;
+        text-align: center !important;
+        justify-content: center !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        box-sizing: border-box !important;
+      }
+      .report-dates-row {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px !important;
+      }
+      .advanced-filters-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+      }
+      .report-filter-actions {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px !important;
+        width: 100% !important;
+      }
+      .report-filter-actions .btn {
+        width: 100% !important;
+        height: 40px !important;
+        min-height: 40px !important;
+      }
+      .reports-tabs,
+      #reports-tabs {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-x: visible !important;
+        margin-bottom: 18px !important;
+        border-bottom: none !important;
+        padding-bottom: 0 !important;
+      }
+      .reports-tabs .tab-btn,
+      #reports-tabs .tab-btn {
+        flex: none !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        height: 46px !important;
+        min-height: 46px !important;
+        max-height: 46px !important;
+        padding: 4px 6px !important;
+        font-size: 11.5px !important;
+        font-weight: 600 !important;
+        line-height: 1.25 !important;
+        text-align: center !important;
+        justify-content: center !important;
+        display: flex !important;
+        align-items: center !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+        hyphens: auto !important;
+        box-sizing: border-box !important;
+        border-radius: 8px !important;
+        margin: 0 !important;
+      }
+      .reports-tabs .tab-btn:last-child,
+      #reports-tabs .tab-btn:last-child {
+        grid-column: 1 / -1 !important;
+      }
+    }
+  </style>
+  <meta name="theme-color" content="#0C3925">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Anjani Agri Care">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="../assets/manifest-D8HdiR4G.json">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32x32-CRS5H5EA.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16x16-HTB7vByE.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon-BQCZOboy.png">
+  <link rel="stylesheet" crossorigin href="../assets/dashboard-mQ7gMUI0.css">
+  <link rel="stylesheet" crossorigin href="../assets/search-select-D17WH4Es.css">
 </head>
 <body>
 <div class="app-layout" id="app-layout">
-  <script src="../assets/js/shared-layout.js?v=1791784991612"></script>
+  <script src="../assets/js/tenant-context.js"></script>
+  <script src="../assets/js/rbac-context.js"></script>
+  <script src="../assets/js/shared-layout.js"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>LAYOUT.injectLayout('Reports','Analytics / Reports'))</script>
   <main class="main-content" id="main-content">
     <div class="page-body">
+      
+      <!-- Page Header -->
       <div class="page-header">
         <div class="page-header-left">
-          <h2>Business Reports</h2>
-          <p>Sales analytics, P&L overview, and performance insights</p>
+          <h2>Sales, Customer & Business Reports</h2>
+          <p>Annual sales analytics, customer dispatch history, SKU trends, and Excel/CSV exports</p>
         </div>
-        <div class="page-header-right">
-          <div class="date-range" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+        <div class="page-header-right" style="display:flex; gap:10px; align-items:center;">
+          <button class="btn btn-primary export-dropdown-btn" onclick="exportCurrentReportToExcel()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export to Excel
+          </button>
+          <button class="btn btn-secondary export-dropdown-btn" onclick="exportCurrentReportToCSV()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- COMPREHENSIVE FILTER & DATE PRESET BAR -->
+      <div class="report-filter-bar">
+        <!-- Filter Header: Section title and active range badge -->
+        <div class="report-filter-header">
+          <div class="report-filter-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;color:var(--primary,#0C3925);flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span>Report Date Range & Filters</span>
+          </div>
+          <div id="active-range-label" class="report-active-range-badge"></div>
+        </div>
+
+        <!-- Presets Row (Balanced 2-column grid on mobile, inline row on desktop) -->
+        <div class="preset-pill-row" id="report-date-presets">
+          <button type="button" class="cat-pill" data-preset="today" onclick="selectDatePreset('today')">Today</button>
+          <button type="button" class="cat-pill" data-preset="week" onclick="selectDatePreset('week')">This Week</button>
+          <button type="button" class="cat-pill" data-preset="month" onclick="selectDatePreset('month')">This Month</button>
+          <button type="button" class="cat-pill" data-preset="quarter" onclick="selectDatePreset('quarter')">This Quarter</button>
+          <button type="button" class="cat-pill active" data-preset="financial_year" onclick="selectDatePreset('financial_year')">Financial Year (FY)</button>
+          <button type="button" class="cat-pill" data-preset="calendar_year" onclick="selectDatePreset('calendar_year')">Calendar Year (CY)</button>
+          <button type="button" class="cat-pill" data-preset="last_12_months" onclick="selectDatePreset('last_12_months')">Last 12 Months</button>
+          <button type="button" class="cat-pill" data-preset="custom" onclick="selectDatePreset('custom')">Custom</button>
+        </div>
+
+        <!-- Primary Date Inputs (2-column grid on mobile) -->
+        <div class="report-dates-row">
+          <div class="filter-input-group">
+            <label for="date-from">Date From</label>
             <input class="form-input" type="date" id="date-from">
-            <span class="date-sep" style="font-size:12px;color:var(--text-muted)">to</span>
+          </div>
+          <div class="filter-input-group">
+            <label for="date-to">Date To</label>
             <input class="form-input" type="date" id="date-to">
-            <button class="btn btn-secondary" onclick="applyDateFilter()">Apply</button>
-            <button class="btn btn-ghost" onclick="resetDateFilter()" title="Reset Filter" style="padding:8px 12px;min-height:38px">Reset</button>
-            <button class="btn btn-primary" onclick="exportReportToCSV()" style="display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:8px 14px;color:#ffffff !important;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span style="color:#ffffff !important;">Export CSV</span>
-            </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Advanced Business Filters Section -->
+        <div class="advanced-filters-section">
+          <button type="button" class="advanced-filters-toggle-btn" id="toggle-advanced-filters-btn" onclick="toggleAdvancedFilters()" aria-expanded="false">
+            <div class="toggle-btn-left">
+              <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+              </svg>
+              <span>Advanced Business Filters</span>
+              <span class="active-filters-count-badge" id="active-filters-count" style="display:none;">0 active</span>
+            </div>
+            <svg class="chevron-icon" id="advanced-filters-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+
+          <div class="advanced-filters-body" id="advanced-filters-body" style="display:none;">
+            <div class="advanced-filters-grid">
+              <div class="filter-input-group">
+                <label for="filter-client">Customer</label>
+                <select class="form-select" id="filter-client">
+                  <option value="">All Customers</option>
+                </select>
+              </div>
+              <div class="filter-input-group">
+                <label for="filter-company">Company / Entity</label>
+                <select class="form-select" id="filter-company">
+                  <option value="">All Authorized Companies</option>
+                </select>
+              </div>
+              <div class="filter-input-group">
+                <label for="filter-product">Product Formulation</label>
+                <select class="form-select" id="filter-product">
+                  <option value="">All Products</option>
+                </select>
+              </div>
+              <div class="filter-input-group">
+                <label for="filter-sku">SKU / Packaging Size</label>
+                <select class="form-select" id="filter-sku">
+                  <option value="">All Pack Sizes</option>
+                  <option value="100 ml">100 ml</option>
+                  <option value="250 ml">250 ml</option>
+                  <option value="500 ml">500 ml</option>
+                  <option value="1 Litre">1 Litre</option>
+                  <option value="5 Litre">5 Litre</option>
+                </select>
+              </div>
+              <div class="filter-input-group">
+                <label for="filter-order-status">Order Status</label>
+                <select class="form-select" id="filter-order-status">
+                  <option value="">All Order Statuses</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div class="filter-input-group">
+                <label for="filter-dispatch-status">Dispatch Status</label>
+                <select class="form-select" id="filter-dispatch-status">
+                  <option value="">All Dispatch Statuses</option>
+                  <option value="Fully Dispatched">Fully Dispatched</option>
+                  <option value="Partially Dispatched">Partially Dispatched</option>
+                  <option value="Pending Verification">Pending Verification</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter Actions -->
+        <div class="report-filter-actions">
+          <button type="button" class="btn btn-primary" onclick="applyReportFilters()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg>
+            Apply Filters
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="resetReportFilters()" title="Reset All Filters">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;margin-right:6px;"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <!-- WORKSPACE TABS -->
+      <div class="tabs reports-tabs" id="reports-tabs" style="margin-bottom:20px;">
+        <button class="tab-btn active" data-tab="Overview" onclick="switchReportTab('Overview')">Executive Overview</button>
+        <button class="tab-btn" data-tab="CustomerSales" onclick="switchReportTab('CustomerSales')">Customer-Wise Annual Report</button>
+        <button class="tab-btn" data-tab="ProductSales" onclick="switchReportTab('ProductSales')">Product & SKU Sales</button>
+        <button class="tab-btn" data-tab="MonthlyTrends" onclick="switchReportTab('MonthlyTrends')">Monthly Trends</button>
+        <button class="tab-btn" data-tab="CompanySummary" onclick="switchReportTab('CompanySummary')">Company Summary</button>
+      </div>
+
+      <!-- TAB 1: EXECUTIVE OVERVIEW -->
+      <div id="tab-overview" class="report-tab-pane">
+        <!-- Summary KPIs -->
+        <div class="kpi-grid" style="margin-bottom:24px">
+          <div class="stat-card">
+            <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg></div>
+            <div class="stat-label">Total Billed Revenue</div>
+            <div class="stat-value" id="rpt-revenue">—</div>
+            <div class="stat-trend up" id="rpt-revenue-desc">Gross customer orders</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 18H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.19M15 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.19"/><path d="M12 12v6"/><path d="m9 15 3 3 3-3"/></svg></div>
+            <div class="stat-label">Dispatched Units</div>
+            <div class="stat-value" id="rpt-dispatched-units">—</div>
+            <div class="stat-trend up" id="rpt-boxes-summary">— boxes / loose</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <div class="stat-label">Pending Order Units</div>
+            <div class="stat-value" id="rpt-pending-units">—</div>
+            <div class="stat-trend down" id="rpt-pending-desc">Awaiting godown dispatch</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon red"><span aria-hidden="true" style="font-size:24px;font-weight:800;line-height:1">₹</span></div>
+            <div class="stat-label">Outstanding Receivables</div>
+            <div class="stat-value" id="rpt-outstanding">—</div>
+            <div class="stat-trend down" id="rpt-outstanding-desc">Customer credit balance</div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="chart-row">
+          <div class="chart-card">
+            <div class="chart-card-header"><div><div class="chart-card-title">Sales & Revenue Trend</div><div class="chart-card-subtitle">Monthly revenue and dispatched shipments</div></div></div>
+            <div class="chart-container" style="position:relative; height:260px;"><canvas id="sales-trend-chart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-header"><div><div class="chart-card-title">Operational Expenses Breakdown</div><div class="chart-card-subtitle">By cost category distribution</div></div></div>
+            <div class="chart-container" style="position:relative; height:260px;"><canvas id="expense-trend-chart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Top Tables -->
+        <div class="activity-row" style="margin-top:24px">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Top Products by Revenue</div></div>
+            <div class="card-body" style="padding:0; overflow-x:auto;">
+              <table class="data-table top-summary-table" id="top-products-table">
+                <thead><tr><th class="col-rank">#</th><th class="col-name">Product Formulation</th><th class="col-rev">Revenue</th></tr></thead>
+                <tbody><tr><td colspan="3" style="padding:20px;text-align:center"><div class="spinner" style="margin:0 auto"></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Top Clients by Revenue</div></div>
+            <div class="card-body" style="padding:0; overflow-x:auto;">
+              <table class="data-table top-summary-table" id="top-clients-table">
+                <thead><tr><th class="col-rank">#</th><th class="col-name">Client Account</th><th class="col-rev">Revenue</th></tr></thead>
+                <tbody><tr><td colspan="3" style="padding:20px;text-align:center"><div class="spinner" style="margin:0 auto"></div></td></tr></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Summary KPIs -->
-      <div class="kpi-grid" style="margin-bottom:24px">
-        <div class="stat-card">
-          <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg></div>
-          <div class="stat-label">Total Revenue</div>
-          <div class="stat-value" id="rpt-revenue">—</div>
-          <div class="stat-trend up">Delivered sales orders</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/></svg></div>
-          <div class="stat-label">Total Expenses</div>
-          <div class="stat-value" id="rpt-expenses">—</div>
-          <div class="stat-trend down">Operational costs</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/></svg></div>
-          <div class="stat-label">Total Purchases</div>
-          <div class="stat-value" id="rpt-purchases">—</div>
-          <div class="stat-trend down">Raw materials & packaging</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon purple"><span aria-hidden="true" style="font-size:24px;font-weight:800;line-height:1">₹</span></div>
-          <div class="stat-label">Net Profit</div>
-          <div class="stat-value" id="rpt-profit">—</div>
-          <div class="stat-trend up">Revenue - Expenses - Purchases</div>
-        </div>
-      </div>
-
-      <!-- Chart Row -->
-      <div class="chart-row">
-        <div class="chart-card">
-          <div class="chart-card-header"><div><div class="chart-card-title">Sales Trend</div><div class="chart-card-subtitle">Monthly revenue over time</div></div></div>
-          <div class="chart-container" style="position:relative; height:260px;"><canvas id="sales-trend-chart"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <div class="chart-card-header"><div><div class="chart-card-title">Expense Breakdown</div><div class="chart-card-subtitle">By category distribution</div></div></div>
-          <div class="chart-container" style="position:relative; height:260px;"><canvas id="expense-trend-chart"></canvas></div>
-        </div>
-      </div>
-
-      <!-- Top Tables -->
-      <div class="activity-row" style="margin-top:24px">
-        <div class="card">
-          <div class="card-header"><div class="card-title">Top Products by Revenue</div></div>
-          <div class="card-body" id="top-products-table-wrap" style="padding:0; overflow-x:auto;">
-            <table class="data-table top-summary-table" id="top-products-table">
-              <thead><tr><th class="col-rank">#</th><th class="col-name">Product</th><th class="col-rev">Revenue</th></tr></thead>
-              <tbody><tr><td colspan="3" style="padding:20px;text-align:center"><div class="spinner" style="margin:0 auto"></div></td></tr></tbody>
+      <!-- TAB 2: CUSTOMER-WISE ANNUAL REPORT -->
+      <div id="tab-customersales" class="report-tab-pane" style="display:none;">
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; flex-wrap:wrap; gap:12px;">
+            <div>
+              <div class="card-title">Customer-Wise Annual Sales & Dispatch Register</div>
+              <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">Comprehensive breakdown of customer bookings, fulfilled boxes, pending quantities, and payment status.</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <input type="text" id="customer-report-search" class="form-input" placeholder="🔍 Search customer name or city..." style="width:240px; height:36px; font-size:12px; border-radius:6px;" oninput="filterCustomerReportTable(this.value)">
+              <span class="badge badge-primary" id="customer-report-count-badge">0 Customers</span>
+            </div>
+          </div>
+          <div class="table-wrap data-table-wrap-mobile" style="padding:0; border:none;">
+            <table class="data-table" id="customer-sales-table">
+              <thead>
+                <tr>
+                  <th>Customer Name</th>
+                  <th>Type</th>
+                  <th>City</th>
+                  <th>Orders</th>
+                  <th>Ordered Units</th>
+                  <th>Dispatched Units</th>
+                  <th>Boxes / Loose</th>
+                  <th>Pending Units</th>
+                  <th>Returns</th>
+                  <th>Total Billed</th>
+                  <th>Paid Amount</th>
+                  <th>Outstanding</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="13" style="text-align:center; padding:30px;"><div class="spinner" style="margin:0 auto"></div></td></tr>
+              </tbody>
+              <tfoot id="customer-sales-tfoot" style="background:rgba(255,255,255,0.03); font-weight:700;"></tfoot>
             </table>
           </div>
         </div>
-        <div class="card">
-          <div class="card-header"><div class="card-title">Top Clients by Revenue</div></div>
-          <div class="card-body" id="top-clients-table-wrap" style="padding:0; overflow-x:auto;">
-            <table class="data-table top-summary-table" id="top-clients-table">
-              <thead><tr><th class="col-rank">#</th><th class="col-name">Client</th><th class="col-rev">Revenue</th></tr></thead>
-              <tbody><tr><td colspan="3" style="padding:20px;text-align:center"><div class="spinner" style="margin:0 auto"></div></td></tr></tbody>
+      </div>
+
+      <!-- TAB 3: PRODUCT & SKU SALES -->
+      <div id="tab-productsales" class="report-tab-pane" style="display:none;">
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px;">
+            <div>
+              <div class="card-title">Product & SKU Packaging Breakdown</div>
+              <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">Packaging size sales analysis, master carton consumption, and volume supplied.</p>
+            </div>
+            <span class="badge badge-primary" id="product-report-count-badge">0 SKUs</span>
+          </div>
+          <div class="table-wrap data-table-wrap-mobile" style="padding:0; border:none;">
+            <table class="data-table" id="product-sales-table">
+              <thead>
+                <tr>
+                  <th>Product Formulation</th>
+                  <th>Pack Size (SKU)</th>
+                  <th>Units / Box</th>
+                  <th>Orders</th>
+                  <th>Ordered Units</th>
+                  <th>Dispatched Units</th>
+                  <th>Boxes Dispatched</th>
+                  <th>Loose Dispatched</th>
+                  <th>Pending Units</th>
+                  <th>Volume Dispatched</th>
+                  <th>Gross Revenue</th>
+                  <th>Returns</th>
+                  <th>Net Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="13" style="text-align:center; padding:30px;"><div class="spinner" style="margin:0 auto"></div></td></tr>
+              </tbody>
+              <tfoot id="product-sales-tfoot" style="background:rgba(255,255,255,0.03); font-weight:700;"></tfoot>
             </table>
           </div>
         </div>
       </div>
+
+      <!-- TAB 4: MONTHLY TRENDS -->
+      <div id="tab-monthlytrends" class="report-tab-pane" style="display:none;">
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div class="card-header" style="padding:16px 20px;">
+            <div class="card-title">Monthly & Quarterly Commercial Ledger</div>
+            <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">Month-over-month order count, units supplied, master carton dispatches, and collections.</p>
+          </div>
+          <div class="table-wrap data-table-wrap-mobile" style="padding:0; border:none;">
+            <table class="data-table" id="monthly-trend-table">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Orders Booked</th>
+                  <th>Units Dispatched</th>
+                  <th>Boxes Dispatched</th>
+                  <th>Billed Revenue</th>
+                  <th>Collections / Paid</th>
+                  <th>Net Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="7" style="text-align:center; padding:30px;"><div class="spinner" style="margin:0 auto"></div></td></tr>
+              </tbody>
+              <tfoot id="monthly-trend-tfoot" style="background:rgba(255,255,255,0.03); font-weight:700;"></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: COMPANY SUMMARY -->
+      <div id="tab-companysummary" class="report-tab-pane" style="display:none;">
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div class="card-header" style="padding:16px 20px;">
+            <div class="card-title">Multi-Company Performance & Distribution</div>
+            <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">Anjani Agri Care and trading depot summaries across authorized companies.</p>
+          </div>
+          <div class="table-wrap data-table-wrap-mobile" style="padding:0; border:none;">
+            <table class="data-table" id="company-summary-table">
+              <thead>
+                <tr>
+                  <th>Company Name</th>
+                  <th>Code</th>
+                  <th>Role</th>
+                  <th>Orders Count</th>
+                  <th>Units Dispatched</th>
+                  <th>Boxes Dispatched</th>
+                  <th>Gross Revenue</th>
+                  <th>Collections</th>
+                  <th>Outstanding Receivables</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="9" style="text-align:center; padding:30px;"><div class="spinner" style="margin:0 auto"></div></td></tr>
+              </tbody>
+              <tfoot id="company-summary-tfoot" style="background:rgba(255,255,255,0.03); font-weight:700;"></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div>
   </main>
 </div>
 
-<script src="../assets/js/database.js?v=1791784991612"></script>
-<script src="../assets/js/utils.js?v=1791784991612"></script>
-<script src="../assets/js/app.js?v=1791784991612"></script>
-<script src="../assets/js/reports.js?v=1791784991612"></script>
+<!-- Customer 360 Drilldown Modal -->
+<div class="modal-overlay" id="customer-profile-modal">
+  <div class="modal modal-xl">
+    <div class="modal-header">
+      <span class="modal-title" id="cust-modal-title">Customer 360° Profile & Sales History</span>
+      <button class="modal-close" onclick="APP.closeModal('customer-profile-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="cust-modal-body">
+      <!-- Injected dynamically -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="APP.closeModal('customer-profile-modal')">Close</button>
+      <button class="btn btn-primary" onclick="exportCustomerDetailExcel()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export Customer Ledger</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/database.js"></script>
+<script src="../assets/js/inventory-core.js"></script>
+<script src="../assets/js/reports-core.js"></script>
+<script src="../assets/js/utils.js"></script>
+<script src="../assets/js/components/search-select.js"></script>
+<script src="../assets/js/app.js"></script>
+<script src="../assets/js/reports.js"></script>
 </body>
 </html>
-

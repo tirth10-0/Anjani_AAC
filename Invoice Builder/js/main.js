@@ -5,8 +5,48 @@
 
 'use strict';
 
+// Ensure tax-utils functions are available on global scope (falling back if tax-utils.js is not loaded)
+if (typeof globalThis.normalizeTaxType !== 'function') {
+  globalThis.normalizeTaxType = (v) => (typeof v === 'string' && v.toUpperCase().includes('12') ? 'GST12' : (typeof v === 'string' && v.toUpperCase().includes('5') ? 'GST5' : (typeof v === 'string' && v.toUpperCase().includes('18') ? 'GST18' : 'NONE')));
+}
+if (typeof globalThis.getTaxConfig !== 'function') {
+  globalThis.getTaxConfig = (v) => ((typeof TAX_TYPE_CONFIG !== 'undefined' && TAX_TYPE_CONFIG[v]) ? TAX_TYPE_CONFIG[v] : { key: 'NONE', label: 'None GST 0%', rate: 0, cgstRate: 0, sgstRate: 0, igstRate: 0 });
+}
+if (typeof globalThis.calculateInvoiceTotals !== 'function') {
+  globalThis.calculateInvoiceTotals = (sub, taxType, due) => ({ subtotal: sub, taxType: taxType || 'NONE', cgstAmount: 0, sgstAmount: 0, igstAmount: 0, totalTax: 0, grandTotal: sub + (Number(due) || 0), dueAmount: Number(due) || 0 });
+}
+if (typeof globalThis.formatTaxLabel !== 'function') {
+  globalThis.formatTaxLabel = (taxType) => (typeof globalThis.getTaxConfig === 'function' ? globalThis.getTaxConfig(taxType).label : String(taxType || ''));
+}
+const safeStorage = (typeof window !== 'undefined' && window.safeStorage) ? window.safeStorage : {
+  getItem: (k) => { try { return localStorage.getItem(k); } catch(e) { return null; } },
+  setItem: (k, v) => { try { localStorage.setItem(k, v); } catch(e) {} },
+  removeItem: (k) => { try { localStorage.removeItem(k); } catch(e) {} }
+};
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
+function cleanItemName(name) {
+  if (!name) return '';
+  let str = String(name).trim();
+  str = str.replace(/\b(boxes|box)(?:\s+|-)+(?:boxes|box)\b/gi, (match) => /boxes/i.test(match) ? 'Boxes' : 'Box');
+  str = str.replace(/\b(boxes|box)(?:\s+|-)+(?:boxes|box)\b/gi, (match) => /boxes/i.test(match) ? 'Boxes' : 'Box');
+  return str.replace(/\s{2,}/g, ' ').trim();
+}
+
+function cleanUnitLabel(text) {
+  if (!text) return '';
+  let str = String(text).trim();
+  str = str.replace(/\b(boxes|box)(?:\s+|-)+(?:boxes|box)\b/gi, (match) => /boxes/i.test(match) ? 'Boxes' : 'Box');
+  str = str.replace(/\b(boxes|box)(?:\s+|-)+(?:boxes|box)\b/gi, (match) => /boxes/i.test(match) ? 'Boxes' : 'Box');
+  str = str.replace(/\b(bottles|bottle)(?:\s+|-)+(?:bottles|bottle)\b/gi, (match) => /bottles/i.test(match) ? 'Bottles' : 'Bottle');
+  str = str.replace(/\b(nos|no)(?:\s+|-)+(?:nos|no)\b/gi, 'Nos');
+  str = str.replace(/\b(kg|kgs|kilogram|kilograms)(?:\s+|-)+(?:kg|kgs|kilogram|kilograms)\b/gi, 'Kg');
+  str = str.replace(/\b(litre|litres|ltr|ltrs)(?:\s+|-)+(?:litre|litres|ltr|ltrs)\b/gi, 'Litre');
+  str = str.replace(/\b(ml|milliliters|milliliter)(?:\s+|-)+(?:ml|milliliters|milliliter)\b/gi, 'Ml');
+  return str.replace(/\s{2,}/g, ' ').trim();
+}
+
 const INR = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function esc(s) {
@@ -24,7 +64,7 @@ function normalizeText(value) {
 }
 
 function normalizeBusinessName(value) {
-  if (!value || value === 'AgroChem' || value === 'Agro Chem') return 'Anjani Crop Care';
+  if (!value || value === 'AgroChem' || value === 'Agro Chem' || value === 'Afield Crop Care' || value === 'Estimate') return 'Anjani Agri Care';
   return value;
 }
 
@@ -43,12 +83,25 @@ function formatClientPhoneForPreview(value) {
   return /^mo\./i.test(phone) ? phone : `Mo. ${phone}`;
 }
 
+function formatPhoneDisplay(value) {
+  if (!value) return '';
+  const digits = String(value).replace(/\D/g, '');
+  if (digits.length === 10) return `${digits.slice(0, 5)} ${digits.slice(5)}`;
+  if (digits.length === 12 && digits.startsWith('91')) return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
+  return String(value).trim();
+}
+
 function getUniqueBrands() {
   return [...new Set(inventoryData
     .map(item => (item.brand || item.BrandName || '').toString().trim())
     .filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }));
 }
+
+window.getAllProducts = getAllProducts;
+window.getUniqueBrands = getUniqueBrands;
+window.getProductsForBrand = getProductsForBrand;
+window.getPackagingForProduct = getPackagingForProduct;
 
 function getAllProducts() {
   return [...new Set(inventoryData
@@ -120,6 +173,110 @@ function getPriceForPackaging(brand, product, packaging) {
   );
   if (!match) return '';
   return (match.price || match.Price || '').toString().trim();
+}
+
+function parseVolumeOrWeight(pkgStr) {
+  if (!pkgStr) return { value: 0, unit: 'Litres', litres: 0 };
+  const str = String(pkgStr).trim().toLowerCase();
+  const match = str.match(/([0-9]+(?:\.[0-9]+)?)\s*([a-z]+)/i);
+  if (!match) return { value: 0, unit: 'Litres', litres: 0 };
+  const val = parseFloat(match[1]);
+  const unit = match[2].toLowerCase();
+
+  // Volume
+  if (/^(l|ltr|ltrs|liter|litre|litres)$/i.test(unit)) {
+    return { value: val, unit: 'Litres', litres: val };
+  }
+  if (/^(ml|milliliter|millilitre)$/i.test(unit)) {
+    return { value: val, unit: 'ml', litres: val / 1000 };
+  }
+
+  // Weight
+  if (/^(kg|kgs|kilo|kilogram|kilograms)$/i.test(unit)) {
+    return { value: val, unit: 'Kg', litres: val };
+  }
+  if (/^(g|gm|gms|gram|grams)$/i.test(unit)) {
+    return { value: val, unit: 'gm', litres: val / 1000 };
+  }
+
+  return { value: val, unit: match[2], litres: val };
+}
+
+function getPackagingDetailsForProduct(brand, product, packagingSize) {
+  const brandKey = normalizeText(brand);
+  const prodKey = normalizeText(product);
+  const pkgKey = normalizeText(packagingSize);
+  const match = inventoryData.find(item =>
+    (!brandKey || normalizeText(item.brand || item.BrandName) === brandKey) &&
+    normalizeText(item.product || item.ProductName) === prodKey &&
+    (!pkgKey || normalizeText(item.packaging || item.PackagingSize) === pkgKey)
+  );
+  if (!match) return null;
+  return {
+    unitsPerBox: parseInt(match.units_per_box || match.unitsPerBox || 0, 10) || 0,
+    volumeMl: parseFloat(match.volume_ml || match.volumeMl || 0) || 0,
+    weightGm: parseFloat(match.weight_gm || match.weightGm || 0) || 0,
+    unit: match.unit || 'Bottles',
+    sku: match.sku || '',
+    price: match.price || match.Price || 0,
+    hsn: match.hsn || ''
+  };
+}
+
+function calculateLineItemQuantities(row) {
+  const unitsPerBox = parseInt(row.unitsPerBox, 10) || 0;
+  const boxes = parseFloat(row.boxes) || 0;
+  const loose = parseFloat(row.loose) || 0;
+  let totalUnits = parseFloat(row.totalUnits != null ? row.totalUnits : row.qty) || 0;
+
+  // Preserve explicit totalUnits / qty from loaded document or order!
+  // Only calculate totalUnits if it was 0 or unassigned
+  if (totalUnits === 0 && (boxes > 0 || loose > 0)) {
+    totalUnits = (boxes * (unitsPerBox > 0 ? unitsPerBox : 1)) + loose;
+  } else if (totalUnits > 0 && unitsPerBox > 0 && boxes === 0 && loose === 0) {
+    row.boxes = Math.floor(totalUnits / unitsPerBox);
+    row.loose = totalUnits % unitsPerBox;
+  } else if (parseFloat(row.qty) > 0 && totalUnits === 0) {
+    totalUnits = parseFloat(row.qty);
+    if (unitsPerBox > 0) {
+      row.boxes = Math.floor(totalUnits / unitsPerBox);
+      row.loose = totalUnits % unitsPerBox;
+    }
+  }
+
+  // Determine billed quantity based on pricing basis
+  let billedQty = totalUnits;
+  if (row.priceBasis === 'per_box') {
+    billedQty = boxes + (unitsPerBox > 0 ? (loose / unitsPerBox) : 0);
+  } else {
+    billedQty = totalUnits;
+  }
+
+  // Parse equivalent volume/weight
+  const parsedVol = parseVolumeOrWeight(row.packaging);
+  const totalVolume = parsedVol.litres > 0 ? Math.round(totalUnits * parsedVol.litres * 100) / 100 : 0;
+  const volumeUnit = parsedVol.unit === 'Kg' || parsedVol.unit === 'gm' ? 'Kg' : 'Litres';
+
+  // Unit price and discount
+  const unitPrice = parseFloat(row.price) || 0;
+  const discountPct = parseFloat(row.discountPct) || 0;
+  const rawLineValue = Math.round(billedQty * unitPrice * 100) / 100;
+  const discountAmt = Math.round(rawLineValue * (discountPct / 100) * 100) / 100;
+  const taxableValue = Math.round((rawLineValue - discountAmt) * 100) / 100;
+
+  return {
+    boxes: row.boxes || 0,
+    loose: row.loose || 0,
+    unitsPerBox: unitsPerBox,
+    totalUnits: totalUnits,
+    billedQty: Math.round(billedQty * 100) / 100,
+    totalVolume: totalVolume,
+    volumeUnit: volumeUnit,
+    unitPrice: unitPrice,
+    discountPct: discountPct,
+    discountAmt: discountAmt,
+    taxableValue: taxableValue
+  };
 }
 
 function toast(msg, type = '') {
@@ -251,6 +408,22 @@ const LS_KEY = 'sk_inv_data_v2';
 const LS_INV_NUM_KEY = 'sk_inv_num';
 var rows = [];
 var rowCounter = 0;
+if (typeof window !== 'undefined') {
+  try {
+    Object.defineProperty(window, 'rows', {
+      get() { return rows; },
+      set(v) { rows = Array.isArray(v) ? v : []; },
+      configurable: true
+    });
+    Object.defineProperty(window, 'rowCounter', {
+      get() { return rowCounter; },
+      set(v) { rowCounter = v; },
+      configurable: true
+    });
+  } catch(e) {
+    window.rows = rows;
+  }
+}
 let logoDataUrl = null;
 let inventoryData = []; // [{brand, product, packaging, price}]
 let clientsData = [];   // [{ClientName, Address, Phone, GSTIN}]
@@ -272,7 +445,12 @@ function normalizeProductRow(item) {
   return {
     brand: String(item.brand || item.BrandName || item['Brand Name'] || '').trim(),
     product: String(item.product || item.ProductName || item['Product Name'] || item.name || '').trim(),
+    sku: String(item.sku || item.SKU || '').trim(),
     packaging: String(item.packaging || item.PackagingSize || item['Packaging Size'] || item.size || '').trim(),
+    units_per_box: parseInt(item.units_per_box || item.unitsPerBox || item['Units Per Box'] || 0, 10) || 0,
+    volume_ml: parseFloat(item.volume_ml || item.volumeMl || 0) || 0,
+    weight_gm: parseFloat(item.weight_gm || item.weightGm || 0) || 0,
+    unit: String(item.unit || item.base_unit || item['Unit'] || 'Bottles').trim(),
     price: String(item.price || item.UnitPrice || item['Unit Price'] || '').trim(),
     hsn: String(item.hsn || item.HSN || item['HSN/SAC'] || '').trim(),
   };
@@ -283,8 +461,11 @@ function normalizeClientRow(item) {
     ClientID: String(item.ClientID || item.id || '').trim(),
     ClientName: String(item.ClientName || item['Client Name'] || item.client || item.name || '').trim(),
     Address: String(item.Address || item.address || '').trim(),
+    City: String(item.City || item.city || '').trim(),
+    State: String(item.State || item.state || item.shipping_state || item.billing_state || '').trim(),
+    Pincode: String(item.Pincode || item.pincode || item.pin || item.Pin || '').trim(),
     Phone: String(item.Phone || item.phone || item.Mobile || item.mobile || '').trim(),
-    GSTIN: String(item.GSTIN || item.gstin || '').trim(),
+    GSTIN: String(item.GSTIN || item.gstin || item.gst || item.GST || '').trim(),
     DueAmount: parseFloat(item.DueAmount || item['Due Amount'] || item.dueAmount || item.due || 0) || 0,
   };
 }
@@ -305,16 +486,17 @@ function updateQR() {
     return;
   }
 
-  const upi = ($('s-upi')?.value || '').trim() || 'business@bank';
-  const name = ($('s-company')?.value || '').trim() || 'Business';
+  const upi = ($('s-upi')?.value || '').trim() || '9427213943m@pnb';
+  const name = ($('s-company')?.value || '').trim() || 'Anjani Agri Care';
 
   try {
     qrInstance = new QRCode(qrCanvas, {
       text: `upi://pay?pa=${upi}&pn=${encodeURIComponent(name)}`,
       width: 90,
       height: 90,
+      colorDark: '#000000',
       colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M,
+      correctLevel: (QRCode.CorrectLevel && QRCode.CorrectLevel.M) != null ? QRCode.CorrectLevel.M : 0,
     });
   } catch (err) {
     console.warn('QR render failed:', err);
@@ -344,7 +526,7 @@ function buildQrDataUrl(upi, companyName) {
       height: 90,
       colorDark: '#000000',
       colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M,
+      correctLevel: (QRCode.CorrectLevel && QRCode.CorrectLevel.M) != null ? QRCode.CorrectLevel.M : 0,
     });
 
     const qrCanvas = wrap.querySelector('canvas');
@@ -362,6 +544,12 @@ function buildQrDataUrl(upi, companyName) {
 }
 
 function savePdfBlob(pdf, filename) {
+  if (typeof window !== 'undefined') {
+    window._lastDownloadedInvoicePdf = filename;
+    if (typeof window._onPdfSaved === 'function') {
+      try { window._onPdfSaved(filename); } catch (_) {}
+    }
+  }
   if (window.innerWidth <= 768 && typeof pdf.save === 'function') {
     pdf.save(filename);
     return;
@@ -381,18 +569,35 @@ function savePdfBlob(pdf, filename) {
     link.remove();
   }, 1000);
 }
+window.savePdfBlob = savePdfBlob;
+
+async function fetchDirectPublic(endpoint) {
+  const supabaseUrl = 'https://galqhecdkeskvgnxjsax.supabase.co';
+  const supabaseKey = 'sb_publishable_bSLDWrI4YHYCshblzkiKHw_04XepecY';
+  const sep = endpoint.includes('?') ? '&' : '?';
+  const res = await fetch(`${supabaseUrl}/rest/v1/${endpoint}${sep}apikey=${supabaseKey}`, {
+    headers: {
+      'apikey': supabaseKey,
+      'Authorization': `Bearer ${supabaseKey}`
+    }
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return await res.json();
+}
+window.fetchDirectPublic = fetchDirectPublic;
 
 function getSupabaseClient() {
   if (window.dbClient) return window.dbClient;
   if (typeof window.supabase !== 'undefined' && window.supabase?.createClient) {
-    const supabaseUrl = 'https://jtbettizhwwqmuyofapm.supabase.co';
-    const supabaseKey = 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve';
+    const supabaseUrl = 'https://galqhecdkeskvgnxjsax.supabase.co';
+    const supabaseKey = 'sb_publishable_bSLDWrI4YHYCshblzkiKHw_04XepecY';
     try {
-      window.dbClient = window.supabase.createClient(supabaseUrl, supabaseKey, {
-        auth: {
-          storage: window.localStorage
-        }
-      });
+      const fetchFn = (typeof resilientFetch === 'function') ? resilientFetch : (typeof window.resilientFetch === 'function' ? window.resilientFetch : undefined);
+      const opts = {
+        auth: { storage: window.localStorage, autoRefreshToken: true, persistSession: true }
+      };
+      if (fetchFn) opts.global = { fetch: fetchFn };
+      window.dbClient = window.supabase.createClient(supabaseUrl, supabaseKey, opts);
       return window.dbClient;
     } catch (e) {
       console.warn('Supabase initialization error in Invoice Builder:', e);
@@ -402,14 +607,18 @@ function getSupabaseClient() {
 }
 
 async function loadDefaultLogo() {
-  const candidates = ['../assets/images/logo.jpg', 'public/logo.jpg', 'logo.jpg'];
+  const isApps = window.location.pathname.includes('/apps/');
+  const candidates = isApps
+    ? ['../../assets/images/logo.jpg', 'logo.jpg', 'public/logo.jpg']
+    : ['../assets/images/logo.jpg', 'logo.jpg', 'public/logo.jpg'];
   const sbImg = $('logo-preview-sb');
   const paperImg = $('paper-logo');
   const navImg = $('navbar-logo');
 
   [sbImg, paperImg, navImg].forEach(el => {
     if (el) {
-      if (!el.src || el.src.includes('undefined')) el.src = '../assets/images/logo.jpg';
+      el.onerror = () => { el.onerror = null; el.src = 'logo.jpg'; };
+      if (!el.src || el.src.includes('undefined')) el.src = isApps ? '../../assets/images/logo.jpg' : '../assets/images/logo.jpg';
       el.style.display = 'block';
     }
   });
@@ -418,6 +627,8 @@ async function loadDefaultLogo() {
     try {
       const resp = await fetch(path);
       if (!resp.ok) continue;
+      const ctype = resp.headers.get('content-type') || '';
+      if (ctype.includes('text/html')) continue; // Ignore HTML fallback from Vite
       const blob = await resp.blob();
       await new Promise(resolve => {
         const reader = new FileReader();
@@ -460,6 +671,9 @@ async function loadDefaultLogo() {
 }
 
 async function fetchInventory() {
+  let prodData = null;
+  let packData = null;
+
   try {
     const sb = getSupabaseClient();
     if (sb) {
@@ -468,47 +682,74 @@ async function fetchInventory() {
         sb.from('product_packaging').select('*')
       ]);
 
-      if (!prodRes.error && Array.isArray(prodRes.data)) {
-        const prodData = prodRes.data;
-        const packData = (!packRes.error && Array.isArray(packRes.data)) ? packRes.data : [];
-
-        const pkgByProd = {};
-        for (const pkg of packData) {
-          if (!pkgByProd[pkg.product_id]) pkgByProd[pkg.product_id] = [];
-          pkgByProd[pkg.product_id].push(pkg);
-        }
-
-        const items = [];
-        for (const prod of prodData) {
-          const pkgs = pkgByProd[prod.id];
-          if (pkgs && pkgs.length > 0) {
-            for (const pkg of pkgs) {
-              items.push({
-                ProductID: String(prod.id),
-                brand: String(prod.brand || '').trim(),
-                product: String(prod.name || '').trim(),
-                packaging: String(pkg.packaging_size || prod.unit || '').trim(),
-                price: String(pkg.sell_price != null ? pkg.sell_price : (prod.sell_price || 0)),
-                hsn: String(prod.gst || '').trim()
-              });
-            }
-          } else {
-            items.push({
-              ProductID: String(prod.id),
-              brand: String(prod.brand || '').trim(),
-              product: String(prod.name || '').trim(),
-              packaging: String(prod.unit || '').trim(),
-              price: String(prod.sell_price || 0),
-              hsn: String(prod.gst || '').trim()
-            });
-          }
-        }
-        inventoryData = items.filter(item => item.brand || item.product || item.packaging);
-        return inventoryData;
+      if (!prodRes.error && Array.isArray(prodRes.data) && prodRes.data.length > 0) {
+        prodData = prodRes.data;
+      }
+      if (!packRes.error && Array.isArray(packRes.data)) {
+        packData = packRes.data;
       }
     }
   } catch (err) {
     console.warn('Failed to load inventory from Supabase, attempting fallback:', err);
+  }
+
+  if (!prodData || !prodData.length) {
+    try {
+      const [pDirect, pkDirect] = await Promise.all([
+        fetchDirectPublic('products?select=*'),
+        fetchDirectPublic('product_packaging?select=*')
+      ]);
+      if (Array.isArray(pDirect) && pDirect.length > 0) prodData = pDirect;
+      if (Array.isArray(pkDirect)) packData = pkDirect;
+    } catch (e) {
+      console.warn('Direct inventory fetch note:', e);
+    }
+  }
+
+  if (Array.isArray(prodData) && prodData.length > 0) {
+    const pkgByProd = {};
+    for (const pkg of (packData || [])) {
+      if (!pkgByProd[pkg.product_id]) pkgByProd[pkg.product_id] = [];
+      pkgByProd[pkg.product_id].push(pkg);
+    }
+
+    const items = [];
+    for (const prod of prodData) {
+      const pkgs = pkgByProd[prod.id];
+      if (pkgs && pkgs.length > 0) {
+        for (const pkg of pkgs) {
+          items.push({
+            ProductID: String(prod.id),
+            brand: String(prod.brand || '').trim(),
+            product: String(prod.name || '').trim(),
+            sku: String(prod.sku || '').trim(),
+            packaging: String(pkg.packaging_size || prod.unit || '').trim(),
+            units_per_box: parseInt(pkg.units_per_box, 10) || 0,
+            volume_ml: parseFloat(pkg.volume_ml) || 0,
+            weight_gm: parseFloat(pkg.weight_gm) || 0,
+            unit: String(prod.unit || 'Bottles').trim(),
+            price: String(pkg.sell_price != null ? pkg.sell_price : (prod.sell_price || 0)),
+            hsn: String(prod.gst || '').trim()
+          });
+        }
+      } else {
+        items.push({
+          ProductID: String(prod.id),
+          brand: String(prod.brand || '').trim(),
+          product: String(prod.name || '').trim(),
+          sku: String(prod.sku || '').trim(),
+          packaging: String(prod.unit || '').trim(),
+          units_per_box: 0,
+          volume_ml: 0,
+          weight_gm: 0,
+          unit: String(prod.unit || 'Bottles').trim(),
+          price: String(prod.sell_price || 0),
+          hsn: String(prod.gst || '').trim()
+        });
+      }
+    }
+    inventoryData = items.filter(item => item.brand || item.product || item.packaging);
+    return inventoryData;
   }
 
   try {
@@ -524,24 +765,59 @@ async function fetchInventory() {
 }
 
 async function fetchClients() {
+  let rawData = null;
+
   try {
     const sb = getSupabaseClient();
     if (sb) {
       const { data, error } = await sb.from('clients').select('*');
-      if (!error && Array.isArray(data)) {
-        clientsData = data.map(c => ({
-          ClientID: String(c.id || '').trim(),
-          ClientName: String(c.name || '').trim(),
-          Address: [c.address, c.city].filter(Boolean).join(', ').trim(),
-          Phone: String(c.contact || '').trim(),
-          GSTIN: String(c.gst || '').trim().toUpperCase(),
-          DueAmount: parseFloat(c.balance) || 0
-        })).filter(c => c.ClientName || c.Phone);
-        return clientsData;
+      if (!error && Array.isArray(data) && data.length > 0) {
+        rawData = data;
       }
     }
   } catch (err) {
     console.warn('Failed to load clients from Supabase, attempting fallback:', err);
+  }
+
+  if (!rawData || !rawData.length) {
+    try {
+      const direct = await fetchDirectPublic('clients?select=*');
+      if (Array.isArray(direct) && direct.length > 0) rawData = direct;
+    } catch (e) {
+      console.warn('Direct clients fetch note:', e);
+    }
+  }
+
+  if (Array.isArray(rawData) && rawData.length > 0) {
+    const resolveFn = (typeof window !== 'undefined' && window.resolveClientAddressAndState)
+      ? window.resolveClientAddressAndState
+      : (typeof resolveClientAddressAndState === 'function' ? resolveClientAddressAndState : null);
+
+    clientsData = rawData.map(c => {
+      const res = resolveFn ? resolveFn({
+        address: c.address,
+        city: c.city,
+        state: c.state,
+        pincode: c.pincode,
+        gstin: c.gst
+      }) : {
+        cleanAddress: c.city || c.address || '',
+        state: c.state || '',
+        pincode: c.pincode || ''
+      };
+      return {
+        ClientID: String(c.id || '').trim(),
+        ClientName: String(c.name || '').trim(),
+        Address: res.cleanAddress,
+        City: String(c.city || '').trim(),
+        State: res.state,
+        Pincode: res.pincode,
+        Phone: String(c.contact || '').trim(),
+        GSTIN: String(c.gst || '').trim().toUpperCase(),
+        DueAmount: parseFloat(c.balance) || 0
+      };
+    }).filter(c => c.ClientName || c.Phone);
+    return clientsData;
   }
 
   try {
@@ -665,8 +941,7 @@ function setUserPhone(mobile) {
 }
 
 const SYNC_MAP = {
-  's-company': ['p-company', 'p-from-name'],
-  's-address': ['p-address', 'p-from-sub'],
+  's-company': ['p-company'],
   's-phone': ['p-phone'],
   's-email': ['p-email'],
   's-gstin': ['p-gstin'],
@@ -678,6 +953,103 @@ const SYNC_MAP = {
   's-upi': ['p-upi'],
 };
 
+function updateBillFromPreview() {
+  
+  const compName = $('s-company')?.value || 'Anjani Agri Care';
+  let addr = $('s-address')?.value || '';
+  const state = $('s-company-state')?.value || 'Gujarat';
+  const pin = $('s-company-pincode')?.value || '360024';
+  const phone = formatPhoneDisplay($('s-phone')?.value || '96646 75227');
+  const gstin = ($('s-gstin')?.value || '24AERFS1718Q1ZB').toUpperCase();
+
+  addr = addr.replace(/,?\s*(?:Gujarat)?\s*(?:-\s*)?360024\s*$/i, '').replace(/,?\s*Gujarat\s*$/i, '').trim();
+
+  const pFromName = $('p-from-name');
+  if (pFromName) pFromName.textContent = compName;
+  const pFromAddr = $('p-from-addr');
+  if (pFromAddr) pFromAddr.textContent = addr || 'Sr. No. 67 and 68, Plot No. 33, Siddhi Vinayak Industrial Zone, At: Virva, Tal: Lodhika, Dist: Rajkot, Gujarat.';
+  const pFromState = $('p-from-state');
+  if (pFromState) pFromState.textContent = state;
+  const pFromPin = $('p-from-pin');
+  if (pFromPin) pFromPin.textContent = pin;
+  const pFromPhone = $('p-from-phone');
+  if (pFromPhone) pFromPhone.textContent = phone;
+  const pFromGstin = $('p-from-gstin');
+  if (pFromGstin) pFromGstin.textContent = gstin;
+}
+
+function updateBillToPreview() {
+  const clientName = $('s-client-name')?.value || 'Client Name';
+  let rawAddr = $('s-client-addr')?.value || '';
+  let rawState = $('s-client-state')?.value || '';
+  let rawPin = $('s-client-pincode')?.value || '';
+  const phone = formatPhoneDisplay($('s-client-phone')?.value || '');
+  const gstin = ($('s-client-gstin')?.value || '').toUpperCase();
+
+  const resolveFn = (typeof window !== 'undefined' && window.resolveClientAddressAndState)
+    ? window.resolveClientAddressAndState
+    : (typeof resolveClientAddressAndState === 'function' ? resolveClientAddressAndState : null);
+
+  const res = resolveFn ? resolveFn({
+    address: rawAddr,
+    state: rawState,
+    pincode: rawPin,
+    gstin: gstin
+  }) : {
+    cleanAddress: rawAddr,
+    state: rawState,
+    pincode: rawPin
+  };
+
+  const cleanAddr = res.cleanAddress;
+  const state = res.state || '';
+  const pin = res.pincode || '';
+
+  const pClientName = $('p-client-name');
+  if (pClientName) pClientName.textContent = clientName;
+
+  const pClientAddr = $('p-client-addr-text');
+  if (pClientAddr) {
+    const dispAddr = cleanAddr || rawAddr;
+    pClientAddr.textContent = dispAddr || '';
+    pClientAddr.style.display = dispAddr ? 'block' : 'none';
+  }
+
+  const pStateText = $('p-client-state-text');
+  const pStateRow = $('p-client-state-row');
+  if (pStateText) pStateText.textContent = state;
+  if (pStateRow) pStateRow.style.display = state ? 'block' : 'none';
+
+  const pPinText = $('p-client-pin-text');
+  const pPinRow = $('p-client-pin-row');
+  if (pPinText) pPinText.textContent = pin;
+  if (pPinRow) pPinRow.style.display = pin ? 'block' : 'none';
+
+  const r1 = $('p-client-row-1');
+  if (r1) r1.style.display = (state || pin) ? 'flex' : 'none';
+
+  const pPhoneText = $('p-client-phone-text');
+  const pPhoneRow = $('p-client-phone-row');
+  if (pPhoneText) pPhoneText.textContent = phone;
+  if (pPhoneRow) pPhoneRow.style.display = phone ? 'block' : 'none';
+
+  const pGstinText = $('p-client-gstin-text');
+  const pGstinRow = $('p-client-gstin-row');
+  if (pGstinText) pGstinText.textContent = gstin;
+  if (pGstinRow) pGstinRow.style.display = gstin ? 'block' : 'none';
+
+  const r2 = $('p-client-row-2');
+  if (r2) r2.style.display = (phone || gstin) ? 'flex' : 'none';
+
+  const pSub = $('p-client-sub');
+  if (pSub) {
+    pSub.textContent = [cleanAddr || rawAddr, phone ? `Phone: ${phone}` : '', gstin ? `GSTIN: ${gstin}` : ''].filter(Boolean).join(' | ');
+  }
+}
+window.updateBillFromPreview = updateBillFromPreview;
+window.updateBillToPreview = updateBillToPreview;
+window.syncClientSub = updateBillToPreview;
+
 function bindSidebarInputs() {
   Object.keys(SYNC_MAP).forEach((srcId) => {
     const el = $(srcId);
@@ -688,6 +1060,15 @@ function bindSidebarInputs() {
         if (dest) dest.textContent = el.value || '—';
       });
       if (srcId === 's-company' || srcId === 's-upi') updateQR();
+      autoSave();
+    });
+  });
+
+  ['s-company', 's-address', 's-company-state', 's-company-pincode', 's-phone', 's-gstin'].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      updateBillFromPreview();
       autoSave();
     });
   });
@@ -713,28 +1094,43 @@ function bindSidebarInputs() {
     });
   }
 
-  const syncClientPreview = () => {
-    const pName = $('p-client-name');
-    const pSub = $('p-client-sub');
-    if (pName) pName.textContent = $('s-client-name')?.value || 'Client Name';
-    if (pSub) {
-      pSub.textContent = [
-        $('s-client-addr')?.value || '',
-        formatClientPhoneForPreview($('s-client-phone')?.value || ''),
-        formatClientGSTINForPreview($('s-client-gstin')?.value || '')
-      ].filter(Boolean).join(' | ');
-    }
-  };
-
-  ['s-client-name', 's-client-addr', 's-client-phone', 's-client-gstin'].forEach((id) => {
+  ['s-client-name', 's-client-addr', 's-client-state', 's-client-pincode', 's-client-phone', 's-client-gstin'].forEach((id) => {
     const el = $(id);
     if (!el) return;
     el.addEventListener('input', () => {
       if (id === 's-client-gstin') {
         const up = normalizeGSTIN(el.value);
         if (el.value !== up) el.value = up;
+        const stateEl = $('s-client-state');
+        if (stateEl && !stateEl.value && up.length >= 2) {
+          const code = up.slice(0, 2);
+          const gstMap = (typeof GST_STATE_MAP !== 'undefined') ? GST_STATE_MAP : (window.GST_STATE_MAP || {});
+          if (gstMap[code]) {
+            stateEl.value = gstMap[code];
+            const posEl = $('s-place-supply');
+            if (posEl) posEl.value = gstMap[code];
+            const scEl = $('s-client-state-code');
+            if (scEl) scEl.value = code;
+          }
+        }
       }
-      syncClientPreview();
+      if (id === 's-client-state') {
+        const val = el.value.trim();
+        const getCodeFn = (typeof getStateCodeFromName === 'function') ? getStateCodeFromName : (window.getStateCodeFromName || null);
+        const code = getCodeFn ? getCodeFn(val) : '';
+        const scEl = $('s-client-state-code');
+        if (scEl) scEl.value = code;
+        const posEl = $('s-place-supply');
+        if (posEl) posEl.value = val;
+      }
+      if (id === 's-client-addr') {
+        const pinInput = $('s-client-pincode');
+        if (pinInput && !pinInput.value) {
+          const pm = el.value.match(/\b\d{6}\b/);
+          if (pm) pinInput.value = pm[0];
+        }
+      }
+      updateBillToPreview();
       autoSave();
     });
   });
@@ -781,17 +1177,30 @@ function refreshPaper() {
   if (dueLine) dueLine.style.display = due ? '' : 'none';
   if (pDueDate) pDueDate.textContent = due ? formatDate(due) : '';
 
-  const pClientName = $('p-client-name');
-  if (pClientName) pClientName.textContent = $('s-client-name')?.value || 'Client Name';
-
-  const pClientSub = $('p-client-sub');
-  if (pClientSub) {
-    pClientSub.textContent = [
-      $('s-client-addr')?.value || '',
-      formatClientPhoneForPreview($('s-client-phone')?.value || ''),
-      formatClientGSTINForPreview($('s-client-gstin')?.value || '')
-    ].filter(Boolean).join(' | ');
+  const dispLine = $('p-disp-line');
+  const pDispNo = $('p-disp-no');
+  if (dispLine && pDispNo) {
+    if (window.currentDispatchNo) {
+      dispLine.style.display = '';
+      pDispNo.textContent = window.currentDispatchNo;
+    } else {
+      dispLine.style.display = 'none';
+    }
   }
+
+  const vehLine = $('p-veh-line');
+  const pVehNo = $('p-veh-no');
+  if (vehLine && pVehNo) {
+    if (window.currentVehicleNo) {
+      vehLine.style.display = '';
+      pVehNo.textContent = window.currentVehicleNo;
+    } else {
+      vehLine.style.display = 'none';
+    }
+  }
+
+  updateBillFromPreview();
+  updateBillToPreview();
 
   const gstin = normalizeGSTIN($('s-client-gstin')?.value || '');
   const gstinEl = $('s-client-gstin');
@@ -813,16 +1222,48 @@ function refreshPaper() {
   if (typeof updateQR === 'function') updateQR();
 }
 
+function updateIntro() {
+  const pIntro = $('p-intro');
+  if (pIntro) pIntro.textContent = $('s-intro')?.value || '';
+}
+
+function updateTerms() {
+  const pTerms = $('p-terms');
+  if (pTerms) {
+    const terms = $('s-terms')?.value?.trim() || '';
+    pTerms.textContent = terms;
+    pTerms.style.display = terms ? '' : 'none';
+  }
+}
+
 function addRow(data = {}) {
   const rid = 'r' + (++rowCounter);
   const isGstMode = document.body.classList.contains('gst-mode');
+  const unitsPerBox = parseInt(data.unitsPerBox, 10) || 0;
+  const boxes = parseFloat(data.boxes) || 0;
+  const loose = parseFloat(data.loose) || 0;
+  let totalUnits = parseFloat(data.totalUnits != null ? data.totalUnits : data.qty) || 0;
+  if ((boxes > 0 || loose > 0) && totalUnits === 0) {
+    totalUnits = (boxes * (unitsPerBox > 0 ? unitsPerBox : 1)) + loose;
+  }
+
   rows.push({
     id: rid,
     brand: data.brand || '',
     name: data.name || '',
     desc: data.desc || '',
     packaging: data.packaging || '',
-    qty: data.qty != null ? data.qty : '',
+    boxes: boxes,
+    unitsPerBox: unitsPerBox,
+    loose: loose,
+    totalUnits: totalUnits,
+    qtyUnit: data.qtyUnit || 'Bottles',
+    totalVolume: parseFloat(data.totalVolume) || 0,
+    volumeUnit: data.volumeUnit || 'Litres',
+    priceBasis: data.priceBasis || 'per_unit',
+    discountPct: parseFloat(data.discountPct) || 0,
+    taxableValue: parseFloat(data.taxableValue) || 0,
+    qty: data.qty != null ? data.qty : (totalUnits || ''),
     price: data.price || '',
     total: data.total || 0,
     hsn: data.hsn || '',
@@ -860,79 +1301,48 @@ function renderRows() {
 
   tbody.innerHTML = '';
 
-  if (!isGst) {
-    thead.innerHTML = 
-`
-      <tr>
-        <th style="width:4%;text-align:center;">No.</th>
-        <th style="width:24%;">Brand Name</th>
-        <th style="width:30%;">Product Name</th>
-        <th style="width:8%;text-align:center;">Qty</th>
-        <th style="width:16%;text-align:right;">Price</th>
-        <th style="width:18%;text-align:right;">Total (&#8377;)</th>
-      </tr>
+  thead.innerHTML = `
+    <tr>
+      <th style="width:4%; text-align:center;">No.</th>
+      <th style="width:34%; text-align:left;">Products</th>
+      <th style="width:14%; text-align:center;">Pack Size</th>
+      <th style="width:10%; text-align:center;">Boxes</th>
+      <th style="width:12%; text-align:center;">Qty (Units)</th>
+      <th style="width:12%; text-align:right;">Rate (&#8377;)</th>
+      <th style="width:14%; text-align:right;">Total (&#8377;)</th>
+    </tr>
+  `;
+
+  rows.forEach((row, i) => {
+    const calc = calculateLineItemQuantities(row);
+    const boxCount = row.boxes > 0 ? row.boxes : (calc.boxes > 0 ? calc.boxes : 0);
+    const totalUnits = calc.totalUnits > 0 ? calc.totalUnits : (row.qty || 0);
+    const packSize = row.packaging || '—';
+
+    const rowTotal = calc.taxableValue > 0 ? calc.taxableValue : (parseFloat(row.total) || 0);
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="text-align:center; white-space:nowrap;">${i + 1}</td>
+      <td style="word-break:break-word; overflow-wrap:break-word; text-align:left;">
+        <div style="font-weight:700; color:var(--paper-text);">${esc(row.name || row.product || 'Product')}</div>
+        ${row.brand && row.brand !== row.name ? `<div style="font-size:10px; color:#64748b; margin-top:1px;">Brand: ${esc(row.brand)}</div>` : ''}
+        ${row.desc && row.desc !== row.packaging && row.desc !== row.name ? `<div style="font-size:9.5px; color:#64748b; margin-top:1px; line-height:1.3;">${esc(row.desc)}</div>` : ''}
+      </td>
+      <td style="text-align:center; white-space:nowrap; font-weight:600; color:#0f766e;">${esc(packSize)}</td>
+      <td style="text-align:center; white-space:nowrap; font-weight:600;">${boxCount} Boxes</td>
+      <td style="text-align:center; white-space:nowrap; font-weight:700; color:#08281A;">${totalUnits}</td>
+      <td style="text-align:right; white-space:nowrap; word-break:normal; overflow-wrap:normal;">
+        <div>${row.price ? '&#8377;' + INR.format(parseFloat(row.price)) + (row.priceBasis === 'per_box' ? ' / bx' : '') : '&mdash;'}</div>
+        ${row.discountPct > 0 ? `<div style="font-size:9.5px; color:#16a34a;">-${row.discountPct}% off</div>` : ''}
+      </td>
+      <td style="text-align:right; white-space:nowrap; word-break:normal; overflow-wrap:normal;" id="rt_${row.id}">
+        <div style="font-weight:700;">${rowTotal > 0 ? '&#8377;' + INR.format(rowTotal) : '&mdash;'}</div>
+        ${isGst && row.discountPct > 0 ? `<div style="font-size:9px; color:#64748b;">(Taxable: &#8377;${INR.format(calc.taxableValue)})</div>` : ''}
+      </td>
     `;
-
-    rows.forEach((row, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = 
-`
-        <td style="text-align:center;white-space:nowrap;">${i + 1}</td>
-        <td style="word-break:break-word;overflow-wrap:break-word;">
-          <div style="font-weight:700;color:var(--paper-text)">${esc(row.brand)}</div>
-        </td>
-        <td style="word-break:break-word;overflow-wrap:break-word;">
-          <div style="font-weight:600;color:var(--paper-text)">${esc(row.name)}</div>
-          ${row.desc ? `<div style="font-size:10px;color:#64748b;margin-top:2px;line-height:1.3;">${esc(row.desc)}</div>` : ''}
-        </td>
-        <td style="text-align:center;white-space:nowrap;">${row.qty || '&mdash;'}</td>
-        <td style="text-align:right;white-space:nowrap;word-break:normal;overflow-wrap:normal;">${row.price ? '&#8377;' + INR.format(parseFloat(row.price)) : '&mdash;'}</td>
-        <td style="text-align:right;white-space:nowrap;word-break:normal;overflow-wrap:normal;" id="rt_${row.id}">${row.total > 0 ? '&#8377;' + INR.format(row.total) : '&mdash;'}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-  } else {
-    thead.innerHTML = 
-`
-      <tr>
-        <th style="width:4%;text-align:center;">No.</th>
-        <th style="width:34%;">Product Name</th>
-        <th style="width:14%;text-align:center;">HSN/SAC</th>
-        <th style="width:8%;text-align:center;">Qty</th>
-        <th style="width:18%;text-align:right;">Rate</th>
-        <th style="width:22%;text-align:right;">Total (&#8377;)</th>
-      </tr>
-    `;
-
-    rows.forEach((row, i) => {
-      const qty = parseFloat(row.qty) || 0;
-      const price = parseFloat(row.price) || 0;
-      const taxable = Math.round((qty * price) * 100) / 100;
-      const rate = taxConfig.rate;
-      const cgstRate = isIgst ? 0 : rate / 2;
-      const sgstRate = isIgst ? 0 : rate / 2;
-      const igstRate = isIgst ? rate : 0;
-      const cgstAmt = isIgst ? 0 : Math.round((taxable * cgstRate / 100) * 100) / 100;
-      const sgstAmt = isIgst ? 0 : Math.round((taxable * sgstRate / 100) * 100) / 100;
-      const igstAmt = isIgst ? Math.round((taxable * igstRate / 100) * 100) / 100 : 0;
-      const rowTotal = Math.round((taxable + cgstAmt + sgstAmt + igstAmt) * 100) / 100;
-
-      const tr = document.createElement('tr');
-      tr.innerHTML = 
-`
-        <td style="text-align:center;white-space:nowrap;">${i + 1}</td>
-        <td style="word-break:break-word;overflow-wrap:break-word;">
-          <div style="font-weight:700;color:var(--paper-text)">${esc(row.name)}</div>
-          ${row.desc ? `<div style="font-size:9px;color:#64748b;margin-top:1px;line-height:1.3;">${esc(row.desc)}</div>` : ''}
-        </td>
-        <td style="text-align:center;white-space:nowrap;">${esc(row.hsn || '—')}</td>
-        <td style="text-align:center;white-space:nowrap;">${row.qty || '&mdash;'}</td>
-        <td style="text-align:right;white-space:nowrap;word-break:normal;overflow-wrap:normal;">${row.price ? '&#8377;' + INR.format(price) : '&mdash;'}</td>
-        <td style="text-align:right;white-space:nowrap;word-break:normal;overflow-wrap:normal;" id="rt_${row.id}">${rowTotal > 0 ? '&#8377;' + INR.format(rowTotal) : '&mdash;'}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-  }
+    tbody.appendChild(tr);
+  });
   recalcAll();
 }
 
@@ -946,10 +1356,11 @@ function renderMobItems() {
   rows.forEach((row, i) => {
     const pkOptions = getPackagingForProduct(row.brand, row.name);
     const isGst = document.body.classList.contains('gst-mode');
+    const calc = calculateLineItemQuantities(row);
     const card = document.createElement('div');
     card.className = 'mob-item-card';
     card.id = 'mob-card-' + row.id;
-    
+
     card.innerHTML = `
       <div class="mob-item-card-header">
         <span class="mob-item-num">Item ${i + 1}${i === 0 ? ' <span style="color:#ef4444;font-weight:700;margin-left:4px;">*</span>' : ''}</span>
@@ -980,6 +1391,64 @@ function renderMobItems() {
         data-rid="${row.id}" data-field="packaging"
         onclick="event.stopPropagation(); showPackagingDropdown(this)" />
 
+      <!-- ── Box & Loose Packaging Tracking Block ── -->
+      <div class="packaging-tracking-box" style="margin: 8px 0; padding: 10px; background: rgba(15, 118, 110, 0.05); border: 1px solid rgba(15, 118, 110, 0.2); border-radius: 8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-size:11px; font-weight:700; color:#0f766e; text-transform:uppercase; letter-spacing:0.4px;">📦 Packaging &amp; Loose Units</span>
+          <span id="pack-summary-${row.id}" style="font-size:11px; font-weight:700; color:#0369a1;">
+            ${calc.totalVolume > 0 ? `${calc.totalVolume} ${calc.volumeUnit}` : ''}
+          </span>
+        </div>
+
+        <div class="sb-row" style="gap:6px; margin-bottom:6px;">
+          <div style="flex:1;">
+            <span class="sb-label" style="font-size:11px;">Boxes / Cartons</span>
+            <input class="sb-input" type="number" min="0" placeholder="0" value="${row.boxes || ''}"
+              data-rid="${row.id}" data-field="boxes"
+              oninput="onBoxLooseInput(this)" onfocus="this.select()" />
+          </div>
+          <div style="flex:1;">
+            <span class="sb-label" style="font-size:11px;">Units / Box</span>
+            <input class="sb-input" type="number" min="0" placeholder="e.g. 10" value="${row.unitsPerBox || ''}"
+              data-rid="${row.id}" data-field="unitsPerBox"
+              oninput="onBoxLooseInput(this)" onfocus="this.select()" />
+          </div>
+          <div style="flex:1;">
+            <span class="sb-label" style="font-size:11px;">Loose Units</span>
+            <input class="sb-input" type="number" min="0" placeholder="0" value="${row.loose || ''}"
+              data-rid="${row.id}" data-field="loose"
+              oninput="onBoxLooseInput(this)" onfocus="this.select()" />
+          </div>
+        </div>
+
+        <div class="sb-row" style="gap:6px; margin-bottom:6px;">
+          <div style="flex:1.2;">
+            <span class="sb-label" style="font-size:11px;">Total Units (${row.qtyUnit || 'Bottles'})</span>
+            <input class="sb-input" type="number" min="0" placeholder="0" value="${calc.totalUnits || row.qty || ''}"
+              data-rid="${row.id}" data-field="totalUnits"
+              oninput="onTotalUnitsInput(this)" onfocus="this.select()" style="font-weight:700; background:#ffffff;" />
+          </div>
+          <div style="flex:1.2;">
+            <span class="sb-label" style="font-size:11px;">Pricing Basis</span>
+            <select class="sb-input select-styled" data-rid="${row.id}" data-field="priceBasis" onchange="onPriceBasisChange(this)" style="font-size:12px;">
+              <option value="per_unit" ${row.priceBasis !== 'per_box' ? 'selected' : ''}>Per Unit (${row.qtyUnit || 'Bottle'})</option>
+              <option value="per_box" ${row.priceBasis === 'per_box' ? 'selected' : ''}>Per Box</option>
+            </select>
+          </div>
+          <div style="flex:0.8;">
+            <span class="sb-label" style="font-size:11px;">Disc (%)</span>
+            <input class="sb-input" type="number" min="0" max="100" step="0.5" placeholder="0" value="${row.discountPct || ''}"
+              data-rid="${row.id}" data-field="discountPct"
+              oninput="onDiscountInput(this)" onfocus="this.select()" />
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:#475569; padding-top:4px; border-top:1px dashed #cbd5e1;">
+          <span>Taxable Qty: <strong id="billed-qty-${row.id}">${cleanUnitLabel(row.priceBasis === 'per_box' ? `${calc.billedQty} Boxes` : `${calc.totalUnits} ${row.qtyUnit || 'Units'}`)}</strong></span>
+          <span>Taxable: <strong id="taxable-val-${row.id}">₹${INR.format(calc.taxableValue)}</strong></span>
+        </div>
+      </div>
+
       <span class="sb-label">Description <span style="font-weight:400;color:var(--text-muted)">(editable)</span></span>
       <input class="sb-input" placeholder="Description" value="${esc(row.desc)}"
         data-rid="${row.id}" data-field="desc"
@@ -991,10 +1460,9 @@ function renderMobItems() {
         data-rid="${row.id}" data-field="hsn"
         oninput="onItemInput(this)" />` : ''}
 
-
       <div class="sb-row" style="gap:10px;margin-top:4px">
         <div style="flex:1">
-          <span class="sb-label">Quantity</span>
+          <span class="sb-label">Billed Qty</span>
           <input class="sb-input" type="number" min="0" placeholder="0" value="${row.qty}"
             data-rid="${row.id}" data-field="qty"
             oninput="onQtyPriceInput(this)" onfocus="this.select()" />
@@ -1087,29 +1555,189 @@ function onPackagingChange(el, optValue) {
   const val = optValue !== undefined ? optValue : el.value;
   row.packaging = val;
   if (val) {
-    const price = getPriceForPackaging(row.brand, row.name, val);
-    row.price = price !== '' ? price : row.price;
-    row.desc = val; // auto-fill description = packaging
+    const pkgDetails = getPackagingDetailsForProduct(row.brand, row.name, val);
+    if (pkgDetails) {
+      if (pkgDetails.unitsPerBox > 0) row.unitsPerBox = pkgDetails.unitsPerBox;
+      if (pkgDetails.unit) row.qtyUnit = pkgDetails.unit;
+      if (pkgDetails.price && (!row.price || row.price === '0')) row.price = pkgDetails.price;
+      if (pkgDetails.hsn && !row.hsn) row.hsn = pkgDetails.hsn;
+    } else {
+      const price = getPriceForPackaging(row.brand, row.name, val);
+      row.price = price !== '' ? price : row.price;
+    }
+    row.desc = val;
   } else {
     row.packaging = '';
   }
-  row.total = (parseFloat(row.qty) || 0) * (parseFloat(row.price) || 0);
 
-  const card = document.getElementById('mob-card-' + rid);
+  const calc = calculateLineItemQuantities(row);
+  row.totalUnits = calc.totalUnits;
+  row.qty = row.priceBasis === 'per_box' ? calc.billedQty : calc.totalUnits;
+  row.totalVolume = calc.totalVolume;
+  row.volumeUnit = calc.volumeUnit;
+  row.taxableValue = calc.taxableValue;
+  row.total = calc.taxableValue;
+
+  renderMobItems();
+  recalcAll();
+  renderRows();
+  autoSave();
+}
+
+function onBoxLooseInput(el) {
+  const rid = el.dataset.rid, field = el.dataset.field;
+  const row = rows.find(r => r.id === rid); if (!row) return;
+  row[field] = parseFloat(el.value) || 0;
+
+  const upb = parseInt(row.unitsPerBox, 10) || 1;
+  const b = parseFloat(row.boxes) || 0;
+  const l = parseFloat(row.loose) || 0;
+  row.totalUnits = (b * (upb > 0 ? upb : 1)) + l;
+
+  const calc = calculateLineItemQuantities(row);
+  row.totalUnits = calc.totalUnits;
+  row.qty = row.priceBasis === 'per_box' ? calc.billedQty : calc.totalUnits;
+  row.totalVolume = calc.totalVolume;
+  row.volumeUnit = calc.volumeUnit;
+  row.taxableValue = calc.taxableValue;
+
+  const card = $('mob-card-' + rid);
   if (card) {
-    const pInp = card.querySelector('[data-field="price"]');
-    if (pInp) pInp.value = row.price || '';
-
-    const dInp = card.querySelector('[data-field="desc"]');
-    if (dInp) dInp.value = row.desc || '';
-
-    const tSpan = card.querySelector('.mob-item-total-value');
-    if (tSpan) tSpan.textContent = row.total > 0 ? '₹' + INR.format(row.total) : '—';
-
-    // Also update desktop realtime tags
-    const rt = document.getElementById('rt_' + rid);
-    if (rt) rt.textContent = row.total > 0 ? '₹' + INR.format(row.total) : '—';
+    const tuInp = card.querySelector('[data-field="totalUnits"]');
+    if (tuInp) tuInp.value = calc.totalUnits || '';
+    const qInp = card.querySelector('[data-field="qty"]');
+    if (qInp) qInp.value = row.qty || '';
+    const billedSpan = card.querySelector('#billed-qty-' + rid);
+    if (billedSpan) billedSpan.textContent = cleanUnitLabel(row.priceBasis === 'per_box' ? `${calc.billedQty} Boxes` : `${calc.totalUnits} ${row.qtyUnit || 'Units'}`);
+    const taxSpan = card.querySelector('#taxable-val-' + rid);
+    if (taxSpan) taxSpan.textContent = '₹' + INR.format(calc.taxableValue);
+    const summarySpan = card.querySelector('#pack-summary-' + rid);
+    if (summarySpan) summarySpan.textContent = calc.totalVolume > 0 ? `${calc.totalVolume} ${calc.volumeUnit}` : '';
   }
+
+  recalcAll();
+  renderRows();
+  autoSave();
+}
+
+function onTotalUnitsInput(el) {
+  const rid = el.dataset.rid;
+  const row = rows.find(r => r.id === rid); if (!row) return;
+  const val = parseFloat(el.value) || 0;
+  row.totalUnits = val;
+  const unitsPerBox = parseInt(row.unitsPerBox, 10) || 0;
+  if (unitsPerBox > 0) {
+    row.boxes = Math.floor(val / unitsPerBox);
+    row.loose = val % unitsPerBox;
+  } else {
+    row.boxes = 0;
+    row.loose = val;
+  }
+  const calc = calculateLineItemQuantities(row);
+  row.qty = row.priceBasis === 'per_box' ? calc.billedQty : val;
+  row.totalVolume = calc.totalVolume;
+  row.volumeUnit = calc.volumeUnit;
+  row.taxableValue = calc.taxableValue;
+
+  const card = $('mob-card-' + rid);
+  if (card) {
+    const bInp = card.querySelector('[data-field="boxes"]');
+    if (bInp) bInp.value = row.boxes || '';
+    const lInp = card.querySelector('[data-field="loose"]');
+    if (lInp) lInp.value = row.loose || '';
+    const qInp = card.querySelector('[data-field="qty"]');
+    if (qInp) qInp.value = row.qty || '';
+    const billedSpan = card.querySelector('#billed-qty-' + rid);
+    if (billedSpan) billedSpan.textContent = cleanUnitLabel(row.priceBasis === 'per_box' ? `${calc.billedQty} Boxes` : `${calc.totalUnits} ${row.qtyUnit || 'Units'}`);
+    const taxSpan = card.querySelector('#taxable-val-' + rid);
+    if (taxSpan) taxSpan.textContent = '₹' + INR.format(calc.taxableValue);
+    const summarySpan = card.querySelector('#pack-summary-' + rid);
+    if (summarySpan) summarySpan.textContent = calc.totalVolume > 0 ? `${calc.totalVolume} ${calc.volumeUnit}` : '';
+  }
+
+  recalcAll();
+  renderRows();
+  autoSave();
+}
+
+function onPriceBasisChange(el) {
+  const rid = el.dataset.rid;
+  const row = rows.find(r => r.id === rid); if (!row) return;
+  row.priceBasis = el.value || 'per_unit';
+
+  const calc = calculateLineItemQuantities(row);
+  row.qty = row.priceBasis === 'per_box' ? calc.billedQty : calc.totalUnits;
+  row.taxableValue = calc.taxableValue;
+
+  const card = $('mob-card-' + rid);
+  if (card) {
+    const qInp = card.querySelector('[data-field="qty"]');
+    if (qInp) qInp.value = row.qty || '';
+    const billedSpan = card.querySelector('#billed-qty-' + rid);
+    if (billedSpan) billedSpan.textContent = cleanUnitLabel(row.priceBasis === 'per_box' ? `${calc.billedQty} Boxes` : `${calc.totalUnits} ${row.qtyUnit || 'Units'}`);
+    const taxSpan = card.querySelector('#taxable-val-' + rid);
+    if (taxSpan) taxSpan.textContent = '₹' + INR.format(calc.taxableValue);
+  }
+
+  recalcAll();
+  renderRows();
+  autoSave();
+}
+
+function onDiscountInput(el) {
+  const rid = el.dataset.rid;
+  const row = rows.find(r => r.id === rid); if (!row) return;
+  row.discountPct = Math.max(0, Math.min(100, parseFloat(el.value) || 0));
+
+  const calc = calculateLineItemQuantities(row);
+  row.taxableValue = calc.taxableValue;
+
+  const card = $('mob-card-' + rid);
+  if (card) {
+    const taxSpan = card.querySelector('#taxable-val-' + rid);
+    if (taxSpan) taxSpan.textContent = '₹' + INR.format(calc.taxableValue);
+  }
+
+  recalcAll();
+  renderRows();
+  autoSave();
+}
+
+function onQtyPriceInput(el) {
+  const rid = el.dataset.rid, field = el.dataset.field;
+  const row = rows.find(r => r.id === rid); if (!row) return;
+  row[field] = el.value !== '' ? parseFloat(el.value) || 0 : '';
+
+  if (field === 'qty') {
+    row.totalUnits = parseFloat(el.value) || 0;
+    const unitsPerBox = parseInt(row.unitsPerBox, 10) || 0;
+    if (unitsPerBox > 0) {
+      row.boxes = Math.floor(row.totalUnits / unitsPerBox);
+      row.loose = row.totalUnits % unitsPerBox;
+    }
+  }
+
+  const calc = calculateLineItemQuantities(row);
+  row.totalVolume = calc.totalVolume;
+  row.volumeUnit = calc.volumeUnit;
+  row.taxableValue = calc.taxableValue;
+
+  const card = $('mob-card-' + rid);
+  if (card && field === 'qty') {
+    const bInp = card.querySelector('[data-field="boxes"]');
+    if (bInp) bInp.value = row.boxes || '';
+    const lInp = card.querySelector('[data-field="loose"]');
+    if (lInp) lInp.value = row.loose || '';
+    const tuInp = card.querySelector('[data-field="totalUnits"]');
+    if (tuInp) tuInp.value = row.totalUnits || '';
+    const billedSpan = card.querySelector('#billed-qty-' + rid);
+    if (billedSpan) billedSpan.textContent = cleanUnitLabel(row.priceBasis === 'per_box' ? `${calc.billedQty} Boxes` : `${calc.totalUnits} ${row.qtyUnit || 'Units'}`);
+    const taxSpan = card.querySelector('#taxable-val-' + rid);
+    if (taxSpan) taxSpan.textContent = '₹' + INR.format(calc.taxableValue);
+    const summarySpan = card.querySelector('#pack-summary-' + rid);
+    if (summarySpan) summarySpan.textContent = calc.totalVolume > 0 ? `${calc.totalVolume} ${calc.volumeUnit}` : '';
+  }
+
   recalcAll();
   renderRows();
   autoSave();
@@ -1117,25 +1745,28 @@ function onPackagingChange(el, optValue) {
 
 window.addRow = addRow;
 window.removeRow = removeRow;
+window.renderRows = renderRows;
+window.renderMobItems = renderMobItems;
+window.refreshPaper = refreshPaper;
+window.recalcAll = recalcAll;
+window.setClientDue = setClientDue;
+window.tryAutoFillClient = tryAutoFillClient;
+window.setBillingMode = setBillingMode;
+window.updateIntro = updateIntro;
+window.updateTerms = updateTerms;
 window.onItemInput = onItemInput;
 window.onQtyPriceInput = onQtyPriceInput;
+window.onBoxLooseInput = onBoxLooseInput;
+window.onTotalUnitsInput = onTotalUnitsInput;
+window.onPriceBasisChange = onPriceBasisChange;
+window.onDiscountInput = onDiscountInput;
 window.showItemAutocomplete = showItemAutocomplete;
 window.showPackagingDropdown = showPackagingDropdown;
 window.acKeyDown = acKeyDown;
 window.onPackagingChange = onPackagingChange;
-
-function onQtyPriceInput(el) {
-  const rid = el.dataset.rid, field = el.dataset.field;
-  const row = rows.find(r => r.id === rid); if (!row) return;
-  row[field] = el.value !== '' ? parseFloat(el.value) || 0 : '';
-  row.total = (parseFloat(row.qty) || 0) * (parseFloat(row.price) || 0);
-  // Update mobile total cell live
-  const mt = $('mob-rt-' + rid); if (mt) mt.textContent = row.total > 0 ? '₹' + INR.format(row.total) : '—';
-  const rt = $('rt_' + rid); if (rt) rt.textContent = row.total > 0 ? '₹' + INR.format(row.total) : '—';
-  // Re-render the full row table for preview paper
-  renderRows();
-  autoSave();
-}
+window.calculateLineItemQuantities = calculateLineItemQuantities;
+window.getPackagingDetailsForProduct = getPackagingDetailsForProduct;
+window.parseVolumeOrWeight = parseVolumeOrWeight;
 
 // ─── CALCULATIONS ─────────────────────────────────────────────────────────────
 function resolveTaxTypeFromInputs() {
@@ -1153,24 +1784,36 @@ function setTaxType(taxType) {
   rows.forEach(row => { row.gstRate = config.rate; });
   renderRows();
 }
+
 function recalcAll() {
   const isGst = document.body.classList.contains('gst-mode');
-  const stateCode = (document.getElementById('s-client-state-code')?.value || '24').trim();
-  const isSameState = stateCode === '24';
+  const taxType = resolveTaxTypeFromInputs();
+  const taxConfig = getTaxConfig(taxType);
+  const isIgst = taxType.startsWith('IGST');
+  const rate = taxConfig.rate;
   const due = parseFloat($('s-client-due')?.value) || 0;
 
   rows.forEach(r => {
-    const qty = parseFloat(r.qty) || 0;
-    const price = parseFloat(r.price) || 0;
-    const total = Math.round((qty * price) * 100) / 100;
-    r.total = total;
-    const formatted = total > 0 ? '₹' + INR.format(total) : '—';
+    const calc = calculateLineItemQuantities(r);
+    r.boxes = calc.boxes;
+    r.loose = calc.loose;
+    r.unitsPerBox = calc.unitsPerBox;
+    r.totalUnits = calc.totalUnits;
+    r.totalVolume = calc.totalVolume;
+    r.volumeUnit = calc.volumeUnit;
+    r.discountPct = calc.discountPct;
+    r.taxableValue = calc.taxableValue;
+    r.qty = r.priceBasis === 'per_box' ? calc.billedQty : calc.totalUnits;
+
+    const lineTotal = calc.taxableValue > 0 ? calc.taxableValue : (parseFloat(r.total) || 0);
+    r.total = lineTotal;
+
+    const formatted = lineTotal > 0 ? '₹' + INR.format(lineTotal) : '—';
     const rt = $('rt_' + r.id); if (rt) rt.textContent = formatted;
     const mt = $('mob-rt-' + r.id); if (mt) mt.textContent = formatted;
   });
 
-  const sub = rows.reduce((s, r) => s + (parseFloat(r.total || 0)), 0);
-  const taxType = resolveTaxTypeFromInputs();
+  const sub = rows.reduce((s, r) => s + (parseFloat(r.taxableValue != null ? r.taxableValue : r.total) || 0), 0);
   const totals = calculateInvoiceTotals(sub, taxType, due);
   syncTaxPreviewRows(totals);
   const psub = $('p-subtotal'); if (psub) psub.textContent = '₹' + INR.format(totals.subtotal);
@@ -1190,8 +1833,6 @@ function recalcAll() {
   const pcgstLabel = $('p-cgst-label');
   const psgstLabel = $('p-sgst-label');
   const pigstLabel = $('p-igst-label');
-
-  const isIgst = resolveTaxTypeFromInputs().startsWith('IGST');
 
   if (isGst) {
     if (ptaxtypeRow) ptaxtypeRow.style.display = 'none';
@@ -1314,8 +1955,11 @@ function showPackagingDropdown(inputEl) {
   renderDropdown(matches, inputEl, rid);
 }
 
-function showItemAutocomplete(inputEl, fieldType) {
+async function showItemAutocomplete(inputEl, fieldType) {
   currentAcInput = inputEl;
+  if (!inventoryData || !inventoryData.length) {
+    try { await fetchInventory(); } catch (_) {}
+  }
   const rid = inputEl.dataset.rid;
   const row = rows.find(r => r.id === rid);
   const val = inputEl.value.toLowerCase().trim();
@@ -1323,10 +1967,10 @@ function showItemAutocomplete(inputEl, fieldType) {
 
   if (fieldType === 'brand') {
     const brands = getUniqueBrands();
-    matches = brands.filter(b => b.toLowerCase().includes(val)).map(b => ({ label: b, type: 'brand', data: { brand: b } }));
-  } else if (fieldType === 'name' && row) {
-    const products = row.brand ? getProductsForBrand(row.brand) : getAllProducts();
-    matches = products.filter(p => p.toLowerCase().includes(val)).map(p => ({ label: p, type: 'name', data: { product: p } }));
+    matches = brands.filter(b => !val || b.toLowerCase().includes(val)).map(b => ({ label: b, type: 'brand', data: { brand: b } }));
+  } else if (fieldType === 'name') {
+    const products = (row && row.brand) ? getProductsForBrand(row.brand) : getAllProducts();
+    matches = products.filter(p => !val || p.toLowerCase().includes(val)).map(p => ({ label: p, type: 'name', data: { product: p } }));
   }
 
   renderDropdown(matches.slice(0, 12), inputEl, rid);
@@ -1338,25 +1982,59 @@ function setClientDue(value) {
   recalcAll();
 }
 
+window.showClientAutocomplete = showClientAutocomplete;
+window.showItemAutocomplete = showItemAutocomplete;
+window.fetchClients = fetchClients;
+window.fetchInventory = fetchInventory;
+
 function applyClientSelection(client) {
   if (!client) return;
-  const name = client.ClientName || '';
-  const addr = client.Address || '';
-  const phone = client.Phone || '';
-  const gstin = client.GSTIN || '';
-  const due = client.DueAmount != null ? client.DueAmount : 0;
+  const name = client.ClientName || client.name || '';
+  const resolveFn = (typeof window !== 'undefined' && window.resolveClientAddressAndState)
+    ? window.resolveClientAddressAndState
+    : (typeof resolveClientAddressAndState === 'function' ? resolveClientAddressAndState : null);
+
+  const res = resolveFn ? resolveFn({
+    address: client.Address || client.address || '',
+    city: client.City || client.city || '',
+    state: client.State || client.state || '',
+    pincode: client.Pincode || client.pincode || client.pin || '',
+    gstin: client.GSTIN || client.gstin || client.gst || ''
+  }) : {
+    cleanAddress: client.Address || client.address || '',
+    state: client.State || client.state || '',
+    pincode: client.Pincode || client.pincode || ''
+  };
+
+  const addr = res.cleanAddress;
+  const state = res.state || '';
+  const pin = res.pincode || '';
+  const phone = client.Phone || client.phone || '';
+  const gstin = client.GSTIN || client.gstin || '';
+  const due = client.DueAmount != null ? client.DueAmount : (client.dueAmount != null ? client.dueAmount : 0);
 
   const nameEl = $('s-client-name');
   const addrEl = $('s-client-addr');
+  const stateEl = $('s-client-state');
+  const pinEl = $('s-client-pincode');
   const phoneEl = $('s-client-phone');
   const gstinEl = $('s-client-gstin');
+  const stateCodeEl = $('s-client-state-code');
+  const posEl = $('s-place-supply');
 
   if (nameEl) nameEl.value = name;
   if (addrEl) addrEl.value = addr;
+  if (stateEl) stateEl.value = state;
+  if (pinEl) pinEl.value = pin;
   if (phoneEl) phoneEl.value = phone;
   if (gstinEl) gstinEl.value = gstin;
+  if (posEl) posEl.value = state;
+  if (stateCodeEl) {
+    const getCodeFn = (typeof getStateCodeFromName === 'function') ? getStateCodeFromName : (window.getStateCodeFromName || null);
+    stateCodeEl.value = getCodeFn ? getCodeFn(state) : '';
+  }
   setClientDue(due);
-  syncClientSub();
+  updateBillToPreview();
   refreshPaper();
   autoSave();
 }
@@ -1368,8 +2046,11 @@ function tryAutoFillClient(rawValue) {
   if (match) applyClientSelection(match);
 }
 
-function showClientAutocomplete(inputEl) {
+async function showClientAutocomplete(inputEl) {
   currentAcInput = inputEl;
+  if (!clientsData || !clientsData.length) {
+    try { await fetchClients(); } catch (_) {}
+  }
   const value = String(inputEl?.value || '').trim().toLowerCase();
   const matches = (clientsData || [])
     .filter(client => {
@@ -1455,11 +2136,13 @@ function renderDropdown(items, inputEl, rid) {
       }
     }
 
-    div.addEventListener('mousedown', e => {
-      e.preventDefault(); // crucial to prevent the input from losing focus immediately during touch
+    const handleSelect = (e) => {
+      if (e) e.preventDefault();
       selectAutocompleteItem(item, rid);
       closeDropdown();
-    });
+    };
+    div.addEventListener('mousedown', handleSelect);
+    div.addEventListener('click', handleSelect);
     dd.appendChild(div);
   });
 
@@ -1596,9 +2279,9 @@ function resetQtyIfEmpty(input) { if (input.value === '' || input.value === '0')
 
 // ─── STORAGE (localStorage) ───────────────────────────────────────────────────
 function getFieldValues() {
-  const ids = ['s-company', 's-address', 's-phone', 's-email', 's-gstin', 's-signatory',
+  const ids = ['s-company', 's-address', 's-company-state', 's-company-pincode', 's-phone', 's-email', 's-gstin', 's-signatory',
     's-inv-num', 's-inv-date', 's-due-date', 'gst-rate', 'tax-type',
-    's-client-name', 's-client-addr', 's-client-phone', 's-client-gstin',
+    's-client-name', 's-client-addr', 's-client-state', 's-client-pincode', 's-client-phone', 's-client-gstin',
     's-bank-name', 's-bank-acc', 's-bank-ifsc', 's-upi', 's-intro', 's-terms'];
   return ids.reduce((obj, id) => { obj[id] = $(id)?.value || ''; return obj; }, {});
 }
@@ -1622,36 +2305,36 @@ function setFieldValues(data) {
 
 function autoSave() {
   try {
-    const payload = {
-      fields: getFieldValues(),
-      rows: rows,
-      qr: $('qr-toggle')?.checked || false,
-    };
-    safeStorage.setItem(LS_KEY, JSON.stringify(payload));
-  } catch { }
+    // If currently editing an existing invoice (e.g. from Orders Dispatch or History),
+    // update the cached document for this specific invoice ID
+    if (window.currentInvoiceId) {
+      try {
+        const editDoc = typeof extractInvoiceJSON === 'function' ? extractInvoiceJSON(window.currentInvoiceId) : null;
+        if (editDoc) {
+          safeStorage.setItem('inv_doc_' + window.currentInvoiceId, JSON.stringify(editDoc));
+          safeStorage.setItem('current_edit_invoice', JSON.stringify(editDoc));
+        }
+      } catch (_) {}
+      return;
+    }
+
+    // In new invoice mode:
+    // Do NOT write unfinalized drafts to persistent localStorage under LS_KEY.
+    // Temporary inputs remain in memory so that a normal page refresh or reopening
+    // the standalone builder always initializes a fresh, blank invoice.
+  } catch (_) { }
 }
 
+window.loadSaved = loadSaved;
+
 function loadSaved() {
+  // Automatic draft resurrection is disabled so that refreshing or reopening
+  // the Invoice Builder in new-invoice mode always initializes a fresh blank invoice.
   try {
-    const raw = safeStorage.getItem(LS_KEY);
-    if (!raw) return;
-    const data = JSON.parse(raw);
-    if (data.fields) {
-      if (data.fields['s-address'] && (data.fields['s-address'].includes('Balaji Agro') || data.fields['s-address'].includes('207/1') || data.fields['s-address'].includes('Shapar'))) {
-        data.fields['s-address'] = 'Sr. No. 67 and 68, Plot No. 33, Siddhi Vinayak Industrial Zone, At: Virva, Tal: Lodhika, Dist: Rajkot, Gujarat.';
-      }
-      if (data.fields['s-company'] && data.fields['s-company'].includes('S K Agro')) {
-        data.fields['s-company'] = 'Anjani Crop Care';
-      }
-      setFieldValues(data.fields);
-    }
-    if (Array.isArray(data.rows) && data.rows.length) {
-      rows = [];
-      data.rows.forEach(r => addRow(r));
-    }
-    const qrToggle = $('qr-toggle');
-    if (qrToggle) qrToggle.checked = !!data.qr;
-  } catch { }
+    safeStorage.removeItem(LS_KEY);
+    safeStorage.removeItem('inv_builder_draft');
+  } catch (_) {}
+  return false;
 }
 
 function setInvoiceNumberDisplay(invoiceNumber) {
@@ -1694,11 +2377,11 @@ async function prepareNextInvoiceDraft() {
   });
 
   const clientStateEl = $('s-client-state');
-  if (clientStateEl) clientStateEl.value = 'Gujarat';
+  if (clientStateEl) clientStateEl.value = '';
   const clientStateCodeEl = $('s-client-state-code');
-  if (clientStateCodeEl) clientStateCodeEl.value = '24';
+  if (clientStateCodeEl) clientStateCodeEl.value = '';
   const placeSupplyEl = $('s-place-supply');
-  if (placeSupplyEl) placeSupplyEl.value = 'Gujarat';
+  if (placeSupplyEl) placeSupplyEl.value = '';
 
   const today = getTodayInIndiaISO();
   const dateEl = $('s-inv-date');
@@ -1732,6 +2415,12 @@ async function saveToCloud(silent = false) {
 
     if (result && result.uniqueId) {
       window.currentInvoiceId = result.uniqueId;
+      try {
+        history.replaceState(null, '', '#edit=' + encodeURIComponent(result.uniqueId));
+      } catch (_) {}
+      try {
+        safeStorage.removeItem(LS_KEY);
+      } catch (_) {}
     }
     if (result && result.invoiceNumber) {
       setInvoiceNumberDisplay(result.invoiceNumber);
@@ -1847,14 +2536,59 @@ async function downloadPDF() {
     }
 
     const payload = saveResult?.payload || extractInvoiceJSON(window.currentInvoiceId);
-    const invNum = payload.InvoiceNumber || $('s-inv-num')?.value || $('p-inv-num')?.textContent || '001';
+    const invNum = payload.InvoiceNumber || $('s-inv-num')?.value || $('p-inv-num')?.textContent || '01';
+    const isDispatch = !!(payload.dispatchNo || window.currentDispatchNo || (payload.type === 'dispatch') || String(invNum || '').startsWith('INV-'));
+    const filename = (typeof getStandardInvoicePdfFilename === 'function')
+      ? getStandardInvoicePdfFilename(invNum, isDispatch)
+      : (window.getStandardInvoicePdfFilename ? window.getStandardInvoicePdfFilename(invNum, isDispatch) : `Invoice_${invNum}.pdf`);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
     drawA4InvoicePdf(pdf, payload);
-    savePdfBlob(pdf, 'Invoice_' + invNum + '.pdf');
+    savePdfBlob(pdf, filename);
 
-    if (saveResult) {
+    // Always guarantee saving to history cache upon downloading PDF
+    try {
+      const uniqueId = window.currentInvoiceId || payload.meta?.uniqueId || (saveResult && saveResult.uniqueId) || ('INV-' + Date.now().toString(36).toUpperCase());
+      window.currentInvoiceId = uniqueId;
+      payload.meta = payload.meta || {};
+      payload.meta.uniqueId = uniqueId;
+      payload.meta.invoiceNumber = invNum;
+      payload.InvoiceNumber = invNum;
+
+      if (typeof safeStorage !== 'undefined') {
+        safeStorage.setItem('inv_doc_' + uniqueId, JSON.stringify(payload));
+        let history = [];
+        try {
+          history = JSON.parse(safeStorage.getItem('invoice_history_cache') || '[]');
+        } catch (_) { history = []; }
+
+        const summary = {
+          uniqueId: uniqueId,
+          invoiceNumber: invNum,
+          date: payload.meta?.date || payload.Date || new Date().toISOString().substring(0, 10),
+          dueDate: payload.meta?.dueDate || payload.DueDate || '',
+          customerName: payload.customer?.name || payload.ClientName || 'Unnamed Client',
+          mobile: payload.customer?.phone || payload.customer?.contact || payload.ClientPhone || '',
+          totalAmount: parseFloat(payload.calculations?.grandTotal || payload.GrandTotal || 0) || 0,
+          totalBoxes: (payload.rows || []).reduce((sum, r) => sum + (parseFloat(r.boxes) || 0), 0),
+          totalUnits: (payload.rows || []).reduce((sum, r) => sum + (parseFloat(r.totalUnits || r.qty) || 0), 0),
+          is_stock_deducted: false
+        };
+
+        const existingIdx = history.findIndex(h => h.uniqueId === uniqueId || (h.invoiceNumber && h.invoiceNumber === invNum));
+        if (existingIdx >= 0) {
+          history[existingIdx] = { ...history[existingIdx], ...summary };
+        } else {
+          history.unshift(summary);
+        }
+        safeStorage.setItem('invoice_history_cache', JSON.stringify(history));
+      }
+    } catch (histErr) {
+      console.warn('PDF download history save note:', histErr);
+    }
+
+    if (typeof advanceToNextInvoiceDraftAfterDownload === 'function') {
       const nextNum = await advanceToNextInvoiceDraftAfterDownload();
       const displayNext = nextNum || $('s-inv-num')?.value || $('p-inv-num')?.textContent || '';
       toast({
@@ -1882,6 +2616,56 @@ async function downloadPDF() {
 
 const downloadVectorPDF = downloadPDF;
 
+// ─── WHATSAPP PDF SHARING ──────────────────────────────────────────────────
+async function shareInvoiceWhatsApp() {
+  const rowsList = window.rows || [];
+  if (!rowsList.length || !rowsList[0] || !rowsList[0].qty || parseFloat(rowsList[0].qty) <= 0) {
+    if (typeof toast === 'function') toast('At least one item with valid quantity is required', 'error');
+    return;
+  }
+
+  const btn = $('whatsapp-btn');
+  const mobBtn = $('mob-whatsapp-btn');
+  try {
+    if (btn) btn.disabled = true;
+    if (mobBtn) mobBtn.disabled = true;
+
+    // Trigger cloud auto-save asynchronously in the background WITHOUT awaiting
+    // (Awaiting network requests breaks transient user activation on mobile browsers!)
+    if (typeof saveToCloud === 'function') {
+      saveToCloud(true).catch(e => console.warn('Background auto-save note:', e));
+    }
+
+    const payload = extractInvoiceJSON(window.currentInvoiceId);
+    const invNum = payload.InvoiceNumber || $('s-inv-num')?.value || $('p-inv-num')?.textContent || '01';
+    const isDispatch = !!(payload.dispatchNo || window.currentDispatchNo || (payload.type === 'dispatch') || String(invNum || '').startsWith('INV-'));
+
+    return await window.shareInvoicePdfOnWhatsApp(payload, {
+      isDispatch,
+      onToast: (msg, type) => {
+        if (typeof toast === 'function') toast(msg, type);
+      }
+    });
+
+  } catch (err) {
+    console.error('WhatsApp share error:', err);
+    if (typeof toast === 'function') toast('WhatsApp sharing failed: ' + (err.message || 'Unknown error'), 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    if (mobBtn) mobBtn.disabled = false;
+  }
+}
+
+function closeWhatsAppFallbackModal() {
+  const modal = document.getElementById('whatsapp-instructions-modal');
+  if (modal) modal.remove();
+  document.body.style.overflow = '';
+}
+
+window.shareInvoiceWhatsApp = shareInvoiceWhatsApp;
+window.closeWhatsAppFallbackModal = closeWhatsAppFallbackModal;
+window.closeWhatsAppFallbackModal = closeWhatsAppFallbackModal;
+
 // ─── MOBILE UI ────────────────────────────────────────────────────────────────
 function initMobile() {
   const isMob = window.innerWidth <= 768;
@@ -1893,9 +2677,11 @@ function initMobile() {
   }
   if (isMob) showMobilePanel('edit');
 
-  // Wire up mobile PDF button
+  // Wire up mobile PDF and WhatsApp buttons
   const mobPdf = $('mob-pdf-btn');
   if (mobPdf) mobPdf.onclick = downloadPDF;
+  const mobWhatsApp = $('mob-whatsapp-btn');
+  if (mobWhatsApp) mobWhatsApp.onclick = shareInvoiceWhatsApp;
 }
 
 function showMobilePanel(panel) {
@@ -1928,6 +2714,202 @@ function scalePaperForMobile() {
   });
 }
 
+// ─── EDIT MODE & NEW INVOICE CONTROLS ──────────────────────────────────────────
+function updateEditModeBanner() {
+  const banner = $('builder-mode-banner');
+  const text = $('builder-mode-text');
+  if (!banner) return;
+
+  if (window.currentInvoiceId) {
+    banner.style.display = 'flex';
+    banner.className = 'mode-edit';
+    banner.style.background = '#eff6ff';
+    banner.style.borderColor = '#bfdbfe';
+    banner.style.color = '#1e40af';
+    const dispLabel = window.currentDispatchNo ? ' (' + window.currentDispatchNo + ')' : '';
+    if (text) text.innerHTML = '<span><strong>Editing Invoice:</strong> ' + window.currentInvoiceId + dispLabel + '</span>';
+  } else {
+    banner.style.display = 'none';
+    banner.className = 'mode-new';
+    if (text) text.innerHTML = '';
+  }
+}
+window.updateEditModeBanner = updateEditModeBanner;
+
+async function startNewInvoice(force = false) {
+  try {
+    if (typeof _currentLoadToken !== "undefined") _currentLoadToken++;
+    window.currentInvoiceId = null;
+    window.currentDispatchNo = '';
+    window.currentVehicleNo = '';
+    window.currentInvoiceFinalized = false;
+    window._invoiceSavedOnce = false;
+
+    // Clean hash and query params from URL cleanly without page reload
+    if (window.location.hash || window.location.search) {
+      history.replaceState(null, '', window.location.pathname);
+    }
+
+    // Clear temporary edit session storage
+    try {
+      safeStorage.removeItem('current_edit_invoice');
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('current_edit_invoice');
+      }
+      safeStorage.removeItem('inv_builder_draft');
+      safeStorage.removeItem(LS_KEY); // clear saved draft so fresh blank state is ready
+    } catch (_) {}
+
+    // Reset customer and dispatch inputs
+    ['s-client-name', 's-client-addr', 's-client-phone', 's-client-gstin', 's-client-due', 's-due-date'].forEach(id => {
+      const el = $(id);
+      if (el) el.value = '';
+    });
+
+    const clientStateEl = $('s-client-state');
+    if (clientStateEl) clientStateEl.value = '';
+    const clientStateCodeEl = $('s-client-state-code');
+    if (clientStateCodeEl) clientStateCodeEl.value = '';
+    const placeSupplyEl = $('s-place-supply');
+    if (placeSupplyEl) placeSupplyEl.value = '';
+
+    const curDateEl = $('s-inv-date');
+    if (curDateEl) curDateEl.value = getTodayInIndiaISO();
+
+    // Reset dispatch & vehicle lines on preview
+    const dispEl = $('p-disp-line');
+    if (dispEl) dispEl.style.display = 'none';
+    const vehEl = $('p-veh-line');
+    if (vehEl) vehEl.style.display = 'none';
+
+    // Reset client preview text & address rows
+    const pcName = $('p-client-name');
+    if (pcName) pcName.textContent = 'Client Name';
+    const pcAddr = $('p-client-addr-text');
+    if (pcAddr) {
+      pcAddr.textContent = '';
+      pcAddr.style.display = 'none';
+    }
+    const pcSub = $('p-client-sub');
+    if (pcSub) pcSub.textContent = '';
+    const pDueLine = $('p-due-line');
+    if (pDueLine) pDueLine.style.display = 'none';
+
+    const pStateRow = $('p-client-state-row');
+    if (pStateRow) pStateRow.style.display = 'none';
+    const pPinRow = $('p-client-pin-row');
+    if (pPinRow) pPinRow.style.display = 'none';
+    const pPhoneRow = $('p-client-phone-row');
+    if (pPhoneRow) pPhoneRow.style.display = 'none';
+    const pGstinRow = $('p-client-gstin-row');
+    if (pGstinRow) pGstinRow.style.display = 'none';
+    const r1 = $('p-client-row-1');
+    if (r1) r1.style.display = 'none';
+    const r2 = $('p-client-row-2');
+    if (r2) r2.style.display = 'none';
+
+    // Reset rows to 1 blank row
+    rows = [];
+    rowCounter = 0;
+    ensureOneBlankItem();
+
+    // Request next invoice number
+    await setAutoInvoiceNumber(true);
+
+    // Update edit banner UI
+    updateEditModeBanner();
+
+    // Re-render and recalculate
+    renderRows();
+    renderMobItems();
+    refreshPaper();
+    recalcAll();
+
+    toast('Ready for new invoice');
+    return true;
+  } catch (err) {
+    console.error('[InvoiceBuilder] Error starting new invoice:', err);
+    return false;
+  }
+}
+window.startNewInvoice = startNewInvoice;
+window.resetInvoiceBuilderToCleanState = startNewInvoice;
+
+// ─── DEDICATED INVOICE LOADER ──────────────────────────────────────────────────
+let _currentLoadToken = 0;
+async function loadInvoiceById(editId) {
+  if (!editId) return false;
+  const thisToken = ++_currentLoadToken;
+  console.log('[InvoiceBuilder] Loading invoice:', editId, 'token:', thisToken);
+  try {
+    toast('Loading invoice ' + editId + '...');
+    const invoiceData = await apiGetInvoice(editId);
+    if (thisToken !== _currentLoadToken) {
+      console.log('[InvoiceBuilder] Stale load response discarded for token:', thisToken);
+      return false;
+    }
+    const restoreFn = (typeof window !== 'undefined' && window.restoreInvoiceUI) ? window.restoreInvoiceUI : (typeof restoreInvoiceUI === 'function' ? restoreInvoiceUI : null);
+    if (invoiceData && restoreFn) {
+      // 1. Completely reset form and preview state before loading new invoice data
+      // This guarantees zero data leakage from previously opened orders, invoices, or dispatches
+      ['s-client-name', 's-client-addr', 's-client-phone', 's-client-gstin', 's-client-due', 's-due-date', 's-client-state', 's-client-state-code', 's-place-supply', 's-notes'].forEach(id => {
+        const el = $(id);
+        if (el) el.value = '';
+      });
+      window.currentDispatchNo = '';
+      window.currentVehicleNo = '';
+
+      // Reset client preview and all optional address rows
+      const pcName = $('p-client-name'); if (pcName) pcName.textContent = 'Client Name';
+      const pcAddr = $('p-client-addr-text'); if (pcAddr) { pcAddr.textContent = ''; pcAddr.style.display = 'none'; }
+      const pcSub = $('p-client-sub'); if (pcSub) pcSub.textContent = '';
+      const pDueLine = $('p-due-line'); if (pDueLine) pDueLine.style.display = 'none';
+      const dispEl = $('p-disp-line'); if (dispEl) dispEl.style.display = 'none';
+      const vehEl = $('p-veh-line'); if (vehEl) vehEl.style.display = 'none';
+      const pStateRow = $('p-client-state-row'); if (pStateRow) pStateRow.style.display = 'none';
+      const pPinRow = $('p-client-pin-row'); if (pPinRow) pPinRow.style.display = 'none';
+      const pPhoneRow = $('p-client-phone-row'); if (pPhoneRow) pPhoneRow.style.display = 'none';
+      const pGstinRow = $('p-client-gstin-row'); if (pGstinRow) pGstinRow.style.display = 'none';
+      const r1 = $('p-client-row-1'); if (r1) r1.style.display = 'none';
+      const r2 = $('p-client-row-2'); if (r2) r2.style.display = 'none';
+      const pNotes = $('p-notes'); if (pNotes) { pNotes.textContent = ''; pNotes.style.display = 'none'; }
+      const pTerms = $('p-terms'); if (pTerms) { pTerms.textContent = ''; pTerms.style.display = 'none'; }
+
+      rows = [];
+      rowCounter = 0;
+
+      // 2. Set currentInvoiceId and restore invoiceData
+      window.currentInvoiceId = editId;
+      window._invoiceSavedOnce = true;
+      window.currentInvoiceFinalized = true;
+      restoreFn(invoiceData);
+      updateEditModeBanner();
+      try {
+        safeStorage.setItem('current_edit_invoice', JSON.stringify(invoiceData));
+      } catch (_) {}
+
+      // Clean hash from URL so that reloading the website initializes a fresh blank invoice
+      if (window.location.hash.startsWith('#edit=')) {
+        try {
+          history.replaceState(null, '', window.location.pathname);
+        } catch (_) {}
+      }
+
+      if (typeof renderRows === 'function') renderRows();
+      if (typeof renderMobItems === 'function') renderMobItems();
+      if (typeof refreshPaper === 'function') refreshPaper();
+      if (typeof recalcAll === 'function') recalcAll();
+      toast('Invoice ' + editId + ' loaded');
+      return true;
+    }
+  } catch (err) {
+    console.error('[InvoiceBuilder] Failed to load invoice:', err);
+    toast('Failed to load invoice details: ' + (err.message || 'Not found'), 'error');
+  }
+  return false;
+}
+window.loadInvoiceById = loadInvoiceById;
+
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
 async function bootApp(loggedInMobile) {
   const today = getTodayInIndiaISO();
@@ -1935,17 +2917,6 @@ async function bootApp(loggedInMobile) {
   if (dateEl) dateEl.value = today;
   if (loggedInMobile) setUserPhone(loggedInMobile);
   initMobile();
-
-  // Show the first blank item immediately instead of waiting for later boot work.
-  if (!window.currentInvoiceId && !rows.length) {
-    ensureOneBlankItem();
-    renderRows();
-    renderMobItems();
-    refreshPaper();
-  }
-
-  // Fetch inventory and clients in background
-  await Promise.all([fetchInventory(), fetchClients()]);
 
   // Load logo
   if (!logoDataUrl && typeof loadDefaultLogo === 'function') loadDefaultLogo();
@@ -1956,6 +2927,7 @@ async function bootApp(loggedInMobile) {
   const clientNameInput = $('s-client-name');
   if (clientNameInput) {
     clientNameInput.onfocus = () => showClientAutocomplete(clientNameInput);
+    clientNameInput.onclick = () => showClientAutocomplete(clientNameInput);
     clientNameInput.oninput = (e) => {
       syncClientSub(e);
       showClientAutocomplete(clientNameInput);
@@ -1964,7 +2936,18 @@ async function bootApp(loggedInMobile) {
   }
 
   // Wire buttons
+  const brandLink = $('brand-home-link');
+  if (brandLink) {
+    brandLink.onclick = async (e) => {
+      e.preventDefault();
+      if (window.location.hash || window.location.search) {
+        try { history.replaceState(null, '', window.location.pathname); } catch(_) {}
+      }
+      await startNewInvoice(true);
+    };
+  }
   const pdfBtn = $('pdf-btn'); if (pdfBtn) pdfBtn.onclick = downloadPDF;
+  const whatsappBtn = $('whatsapp-btn'); if (whatsappBtn) whatsappBtn.onclick = shareInvoiceWhatsApp;
   const saveBtn = $('save-cloud-btn'); if (saveBtn) saveBtn.onclick = () => saveToCloud();
   const modeNonGstBtn = $('mode-nongst'); if (modeNonGstBtn) modeNonGstBtn.onclick = () => setBillingMode('nongst');
   const modeGstBtn = $('mode-gst'); if (modeGstBtn) modeGstBtn.onclick = () => setBillingMode('gst');
@@ -1973,96 +2956,146 @@ async function bootApp(loggedInMobile) {
   initMobile();
   window.addEventListener('resize', initMobile);
 
-  // ─── CHECK FOR URL HASH (Edit Mode) ───
-  const hash = window.location.hash;
+  // 1. FIRST PRIORITY: CHECK FOR URL HASH OR QUERY PARAM (Edit Mode)
+  const hash = window.location.hash || '';
+  const urlParams = new URLSearchParams(window.location.search);
+  const queryEditId = urlParams.get('inv') || urlParams.get('id') || urlParams.get('edit') || urlParams.get('dsp') || urlParams.get('dispatch');
+  let editId = null;
+
   if (hash.startsWith('#edit=')) {
-      const editId = hash.replace('#edit=', '');
-      // ✅ IMMEDIATELY clear the hash from the URL so reloads start fresh
-      history.replaceState(null, '', window.location.pathname);
-      toast('Loading invoice ' + editId + '...');
-      try {
-          const invoiceData = await apiGetInvoice(editId);
-          if (invoiceData && typeof restoreInvoiceUI === 'function') {
-              restoreInvoiceUI(invoiceData);
-              window.currentInvoiceId = editId;
-              window._invoiceSavedOnce = true;
-              window.currentInvoiceFinalized = true;
-              toast('Invoice loaded');
-          }
-      } catch (err) {
-          console.error('Failed to load invoice:', err);
-          toast('Failed to load invoice details: ' + err.message, 'error');
-      }
-  } else if (hash === '#new=gst') {
-      history.replaceState(null, '', window.location.pathname);
-      setBillingMode('gst');
-  } else if (hash === '#new=nongst') {
-      history.replaceState(null, '', window.location.pathname);
-      setBillingMode('nongst');
+    editId = decodeURIComponent(hash.replace('#edit=', '').trim());
+  } else if (queryEditId) {
+    editId = decodeURIComponent(queryEditId.trim());
   }
 
-  // Restore saved invoice draft data on reload
-  let draftLoaded = false;
-  if (!window.currentInvoiceId) {
-    try {
-      const raw = safeStorage.getItem(LS_KEY);
-      if (raw) {
-        loadSaved();
-        draftLoaded = true;
-      }
-    } catch (e) {
-      console.warn('Failed to restore draft:', e);
+  let editLoaded = false;
+  if (editId) {
+    editLoaded = await loadInvoiceById(editId);
+    if (!editLoaded) {
+      // Clear invalid hash from URL so user is not trapped across reloads
+      history.replaceState(null, '', window.location.pathname);
+      toast('Could not load invoice ' + editId + '. Starting fresh invoice.', 'error');
     }
+  } else if (hash === '#new=gst') {
+    history.replaceState(null, '', window.location.pathname);
+    setBillingMode('gst');
+  } else if (hash === '#new=nongst') {
+    history.replaceState(null, '', window.location.pathname);
+    setBillingMode('nongst');
+  } else if (hash === '#new') {
+    history.replaceState(null, '', window.location.pathname);
+    await startNewInvoice(true);
+    return;
   }
 
-  if (!window.currentInvoiceId && !draftLoaded) {
+  // 2. In new invoice mode (no valid editId), ALWAYS initialize a fresh blank invoice
+  if (!editLoaded) {
+    window.currentInvoiceId = null;
+    window.currentDispatchNo = '';
+    window.currentVehicleNo = '';
+    window.currentInvoiceFinalized = false;
+    window._invoiceSavedOnce = false;
+
+    // Purge any temporary draft keys so abandoned/temporary data never survives
+    try {
+      safeStorage.removeItem(LS_KEY);
+      safeStorage.removeItem('inv_builder_draft');
+      safeStorage.removeItem('current_edit_invoice');
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('current_edit_invoice');
+      }
+    } catch (_) {}
+
+    // Reset customer and dispatch inputs
     ['s-client-name', 's-client-addr', 's-client-phone', 's-client-gstin', 's-client-due', 's-due-date'].forEach(id => {
       const el = $(id);
       if (el) el.value = '';
     });
+
     const clientStateEl = $('s-client-state');
-    if (clientStateEl) clientStateEl.value = 'Gujarat';
+    if (clientStateEl) clientStateEl.value = '';
     const clientStateCodeEl = $('s-client-state-code');
-    if (clientStateCodeEl) clientStateCodeEl.value = '24';
+    if (clientStateCodeEl) clientStateCodeEl.value = '';
     const placeSupplyEl = $('s-place-supply');
-    if (placeSupplyEl) placeSupplyEl.value = 'Gujarat';
+    if (placeSupplyEl) placeSupplyEl.value = '';
+
+    const curDateEl = $('s-inv-date');
+    if (curDateEl) curDateEl.value = today;
+
+    // Reset dispatch & vehicle lines on preview
+    const dispEl = $('p-disp-line');
+    if (dispEl) dispEl.style.display = 'none';
+    const vehEl = $('p-veh-line');
+    if (vehEl) vehEl.style.display = 'none';
+
+    // Reset client preview text & address rows
+    const pcName = $('p-client-name');
+    if (pcName) pcName.textContent = 'Client Name';
+    const pcAddr = $('p-client-addr-text');
+    if (pcAddr) {
+      pcAddr.textContent = '';
+      pcAddr.style.display = 'none';
+    }
+    const pcSub = $('p-client-sub');
+    if (pcSub) pcSub.textContent = '';
+    const pDueLine = $('p-due-line');
+    if (pDueLine) pDueLine.style.display = 'none';
+
+    const pStateRow = $('p-client-state-row');
+    if (pStateRow) pStateRow.style.display = 'none';
+    const pPinRow = $('p-client-pin-row');
+    if (pPinRow) pPinRow.style.display = 'none';
+    const pPhoneRow = $('p-client-phone-row');
+    if (pPhoneRow) pPhoneRow.style.display = 'none';
+    const pGstinRow = $('p-client-gstin-row');
+    if (pGstinRow) pGstinRow.style.display = 'none';
+    const r1 = $('p-client-row-1');
+    if (r1) r1.style.display = 'none';
+    const r2 = $('p-client-row-2');
+    if (r2) r2.style.display = 'none';
+
+    // Reset rows to 1 clean blank item
     rows = [];
     rowCounter = 0;
     ensureOneBlankItem();
+
+    // Proactively generate next invoice number
+    await setAutoInvoiceNumber(true);
+
+    // Update edit banner UI
+    updateEditModeBanner();
+
+    // Re-render and recalculate
+    renderRows();
+    renderMobItems();
+    refreshPaper();
+    recalcAll();
+  } else {
+    updateEditModeBanner();
   }
 
-  // Proactively generate invoice number for new records ONLY
-  if (!window.currentInvoiceId) {
-    await setAutoInvoiceNumber();
-  }
-
-  // Wait for DOM to settle then refresh paper and ensure items are visible
+  // Render and settle preview
   setTimeout(() => {
     renderRows();
     renderMobItems();
     refreshPaper();
     recalcAll();
   }, 50);
-  
-  // Extra safety render for mobile items in case of rendering race
+
   setTimeout(() => {
     if (rows.length > 0) renderMobItems();
   }, 150);
-}
 
-// ─── BOOT ON LOAD ────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  // Font loading detection
-  if (document.fonts && typeof document.fonts.load === 'function') {
-    document.fonts.load('24px "Material Symbols Outlined"').then(function() {
-      document.body.classList.add('material-symbols-loaded');
-    }).catch(function(e) {
-      console.warn('Font loading failed:', e);
-      document.body.classList.add('material-symbols-loaded');
-    });
-  } else {
-    document.body.classList.add('material-symbols-loaded');
-  }
+  // 4. Fetch inventory and clients in background (non-blocking!)
+  Promise.all([fetchInventory(), fetchClients()]).catch(e => {
+    console.warn('Background inventory/clients fetch error:', e);
+  });
+}
+window.bootApp = bootApp;
+
+// ─── BOOT ON LOAD (RESILIENT READY DETECTION) ────────────────────────────────
+function bootOnLoad() {
+  document.body.classList.add('material-symbols-loaded');
 
   forceUppercaseValue($('s-gstin'));
   forceUppercaseValue($('s-client-gstin'));
@@ -2076,9 +3109,41 @@ window.addEventListener('DOMContentLoaded', () => {
     if (toolbar) toolbar.classList.remove('hidden');
     if (app) app.classList.remove('hidden');
     if (typeof initMobile === 'function') initMobile();
-    if (typeof bootApp === 'function') bootApp(mobile);
+    if (typeof bootApp === 'function') {
+      Promise.resolve(bootApp(mobile)).catch(err => {
+        console.error('Error in bootApp promise:', err);
+      });
+    }
   } catch (err) {
     console.error('Error during bootApp:', err);
+  }
+}
+
+let _hasBooted = false;
+function safeBootInvoiceBuilder() {
+  if (_hasBooted) return;
+  _hasBooted = true;
+  bootOnLoad();
+}
+
+// Guaranteed boot execution regardless of whether DOMContentLoaded already fired
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', safeBootInvoiceBuilder);
+  window.addEventListener('DOMContentLoaded', safeBootInvoiceBuilder);
+  window.addEventListener('load', safeBootInvoiceBuilder);
+  setTimeout(safeBootInvoiceBuilder, 50);
+} else {
+  safeBootInvoiceBuilder();
+}
+
+// Listen for dynamic hash changes (e.g. user clicks another invoice while already on builder)
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash || '';
+  if (hash.startsWith('#edit=')) {
+    const editId = decodeURIComponent(hash.replace('#edit=', '').trim());
+    if (editId) loadInvoiceById(editId);
+  } else if (!hash || hash === '#new') {
+    startNewInvoice(true);
   }
 });
 
@@ -2166,41 +3231,8 @@ function setBillingMode(mode) {
   autoSave();
 }
 
-async function startNewInvoice(mode) {
-  if (!confirm('Start a new invoice? Unsaved data will be lost.')) return;
-  rows = []; rowCounter = 0;
-  window.currentInvoiceId = null;
-  window._invoiceSavedOnce = false;
-  window.currentInvoiceFinalized = false;
-  ['s-client-name', 's-client-addr', 's-client-phone', 's-client-gstin', 's-client-due', 's-due-date', 's-intro'].forEach(id => {
-    const el = $(id); if (el) el.value = '';
-  });
-  
-  // Reset state fields
-  const clientStateEl = $('s-client-state');
-  if (clientStateEl) clientStateEl.value = 'Gujarat';
-  const clientStateCodeEl = $('s-client-state-code');
-  if (clientStateCodeEl) clientStateCodeEl.value = '24';
-  const placeSupplyEl = $('s-place-supply');
-  if (placeSupplyEl) placeSupplyEl.value = 'Gujarat';
-
-  const today = getTodayInIndiaISO();
-  const dateEl = $('s-inv-date'); if (dateEl) dateEl.value = today;
-
-  setBillingMode(mode);
-
-  // Fetch new number for the new invoice session after resetting state
-  await setAutoInvoiceNumber(true);
-  renderRows();
-  ensureOneBlankItem();
-  renderMobItems();
-  refreshPaper();
-  recalcAll();
-  toast('New ' + (mode === 'gst' ? 'GST' : 'Non-GST') + ' invoice started');
-  
-  // Focus client name input for convenience
-  $('s-client-name')?.focus();
-}
+// Legacy startNewInvoice alias redirected to unified startNewInvoice
+// (Removed shadowed declaration)
 
 function onClientStateChange() {
   const select = $('s-client-state');
@@ -2223,7 +3255,7 @@ function onClientStateChange() {
   }
   
   // Sync place of supply text in preview
-  const pps = $('p-place-supply'); if (pps) pps.textContent = (placeSelect ? placeSelect.value : select.value) || 'Gujarat';
+  const pps = $('p-place-supply'); if (pps) pps.textContent = (placeSelect ? placeSelect.value : select.value) || '';
 
   syncClientSub();
   recalcAll();
@@ -2255,7 +3287,7 @@ function onStateCodeInput() {
   }
   
   // Sync place of supply text in preview
-  const pps = $('p-place-supply'); if (pps) pps.textContent = (placeSelect ? placeSelect.value : select.value) || 'Gujarat';
+  const pps = $('p-place-supply'); if (pps) pps.textContent = (placeSelect ? placeSelect.value : select.value) || '';
 
   syncClientSub();
   recalcAll();
@@ -2275,25 +3307,7 @@ function onRowGstRateChange(el) {
 
 // ─── CLEAR / NEW INVOICE ──────────────────────────────────────────────────────
 async function clearAll() {
-  if (!confirm('Start a new invoice? Unsaved data will be lost.')) return;
-  rows = []; rowCounter = 0;
-  window.currentInvoiceId = null;
-  window._invoiceSavedOnce = false;
-  window.currentInvoiceFinalized = false;
-  ['s-client-name', 's-client-addr', 's-client-phone', 's-client-gstin', 's-client-due', 's-due-date', 's-intro'].forEach(id => {
-    const el = $(id); if (el) el.value = '';
-  });
-  const today = getTodayInIndiaISO();
-  const dateEl = $('s-inv-date'); if (dateEl) dateEl.value = today;
-
-  // Fetch new number for the new invoice session after resetting state
-  await setAutoInvoiceNumber(true);
-  renderRows();
-  ensureOneBlankItem();
-  renderMobItems();
-  refreshPaper();
-  recalcAll();
-  toast('New invoice started');
+  return await startNewInvoice(true);
 }
 
 // Validation

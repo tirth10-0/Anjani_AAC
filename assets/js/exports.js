@@ -1,35 +1,44 @@
-/* exports.js */
+/* assets/js/exports.js - Comprehensive Data Exports & Master Workbook Generator */
 
 function updatePageDebug(text, color) {
   const el = document.getElementById('debug-page-status');
   if (el) {
-    el.textContent = 'Page: ' + text;
+    el.textContent = 'Exports: ' + text;
     if (color) el.style.color = color;
   }
 }
 
 async function loadExports() {
   updatePageDebug('Ready', '#0C3925');
+  setExportPreset('fy');
 }
 
+/**
+ * Fetch raw table data respecting tenant and company scoping
+ */
 async function fetchExportData(tableName, from, to) {
   let query = window.dbClient.from(tableName).select('*');
+
+  // Company scoping via TENANT_CONTEXT
+  if (window.TENANT_CONTEXT) {
+    query = window.TENANT_CONTEXT.filter(query);
+  }
   
   // Date filters where supported
-  if (['orders', 'daily_transactions', 'purchases', 'transactions', 'expenses'].includes(tableName)) {
-    if (from) query = query.gte('date', from);
-    if (to) query = query.lte('date', to);
+  if (['orders', 'daily_transactions', 'purchases', 'transactions', 'expenses', 'order_dispatches'].includes(tableName)) {
+    const dateCol = (tableName === 'order_dispatches') ? 'dispatch_date' : 'date';
+    if (from) query = query.gte(dateCol, from);
+    if (to) query = query.lte(dateCol, to);
   }
   
   const { data, error } = await query;
   if (error) {
-    console.error(`Error fetching ${tableName}:`, error);
-    throw error;
+    console.warn(`Error fetching ${tableName}:`, error);
+    return [];
   }
   
   let records = data || [];
   
-  // Apply numeric descending sort according to the numeric part of the record identifier
   switch(tableName) {
     case 'orders':
       records = UTILS.sortByNumericIdDesc(records, o => o.order_no || o.id);
@@ -40,17 +49,11 @@ async function fetchExportData(tableName, from, to) {
     case 'daily_transactions':
       records = UTILS.sortByNumericIdDesc(records, dt => dt.txn_no || dt.id);
       break;
-    case 'transactions':
-      records = UTILS.sortByNumericIdDesc(records, t => {
-        if (t.notes && t.notes.startsWith('[Ref: ')) {
-          const m = t.notes.match(/^\[Ref:\s*([^\]]+)\]/);
-          if (m) return m[1];
-        }
-        return t.ref_id || t.id;
-      });
+    case 'order_dispatches':
+      records = UTILS.sortByNumericIdDesc(records, d => d.dispatch_no || d.id);
       break;
-    case 'expenses':
-      records = UTILS.sortByNumericIdDesc(records, e => e.id);
+    case 'transactions':
+      records = UTILS.sortByNumericIdDesc(records, t => t.ref_no || t.id);
       break;
     default:
       records = UTILS.sortByNumericIdDesc(records, r => r.id);
@@ -60,7 +63,15 @@ async function fetchExportData(tableName, from, to) {
   return records;
 }
 
+/**
+ * Clean Single Table Export (Excel)
+ */
 async function exportTable(tableName, label) {
+  if (window.RBAC && !window.RBAC.hasPermission(tableName, 'export') && !window.RBAC.hasPermission('reports', 'export')) {
+    APP.showToast('You do not have permission to export this data', 'error');
+    return;
+  }
+
   try {
     APP.showSpinner();
     const data = await fetchExportData(tableName);
@@ -69,72 +80,52 @@ async function exportTable(tableName, label) {
       return; 
     }
     
-    // Select subset of columns to clean the export
     let cleanData = data;
     switch(tableName) {
       case 'clients':
-        cleanData = data.map(c => ({ id: c.id, name: c.name, contact: c.contact, email: c.email, city: c.city, gst: c.gst, type: c.type, credit_limit: c.credit_limit, balance: c.balance, created_at: c.created_at }));
+        cleanData = data.map(c => ({ 'ID': c.id, 'Client Name': c.name, 'Contact': c.contact, 'Email': c.email, 'City': c.city, 'GSTIN': c.gst, 'Type': c.type, 'Credit Limit': c.credit_limit, 'Balance': c.balance }));
         break;
       case 'products':
-        cleanData = data.map(p => ({ id: p.id, name: p.name, batch_no: p.batch_no, category: p.category, unit: p.unit, reorder_level: p.reorder_level, cost_price: p.purchase_price, sell_price: p.sell_price }));
+        cleanData = data.map(p => ({ 'ID': p.id, 'Product Name': p.name, 'Category': p.category, 'Base Unit': p.unit, 'Reorder Level': p.reorder_level, 'Cost Price': p.purchase_price, 'Selling Price': p.sell_price }));
         break;
       case 'orders':
-        cleanData = data.map(o => ({ id: o.id, order_no: o.order_no, client_name: o.client_name, date: o.date, status: o.status, total_amount: o.total_amount, paid_amount: o.paid_amount, notes: o.notes }));
+        cleanData = data.map(o => ({ 'Order No': o.order_no, 'Client': o.client_name, 'Booking Date': o.date, 'Order Status': o.status, 'Dispatch Status': o.dispatch_status || 'Pending', 'Billed Amount': o.total_amount, 'Paid Amount': o.paid_amount, 'Balance': (parseFloat(o.total_amount) || 0) - (parseFloat(o.paid_amount) || 0) }));
         break;
       case 'purchases':
-        cleanData = data.map(p => ({ id: p.id, purchase_no: p.purchase_no, supplier_name: p.supplier_name, date: p.date, status: p.status, total_amount: p.total_amount, paid_amount: p.paid_amount, notes: p.notes }));
+        cleanData = data.map(p => ({ 'Purchase No': p.purchase_no, 'Supplier': p.supplier_name, 'Date': p.date, 'Status': p.status, 'Total Amount': p.total_amount, 'Paid Amount': p.paid_amount }));
         break;
       case 'transactions':
-        cleanData = data.map(t => {
-          let ref = '';
-          if (t.notes && t.notes.startsWith('[Ref: ')) {
-            const m = t.notes.match(/^\[Ref:\s*([^\]]+)\]/);
-            if (m) ref = m[1];
-          } else if (t.ref_id) {
-            ref = 'TXN-' + t.ref_id;
-          } else {
-            ref = 'TXN-' + t.id;
-          }
-          return { id: t.id, date: t.date, type: t.type, ref_no: ref, party_name: t.party_name, amount: t.amount, mode: t.mode, notes: t.notes };
-        });
+        cleanData = data.map(t => ({ 'Date': t.date, 'Type': t.type, 'Ref No': t.ref_no, 'Party': t.party_name, 'Amount': t.amount, 'Payment Mode': t.mode, 'Notes': t.notes }));
         break;
       case 'expenses':
-        cleanData = data.map(e => ({ id: e.id, ref_no: 'EXP-' + String(e.id).padStart(3, '0'), date: e.date, category: e.category, description: e.notes || '', amount: e.amount, payment_mode: e.payment_mode }));
+        cleanData = data.map(e => ({ 'Ref No': 'EXP-' + String(e.id).padStart(3, '0'), 'Date': e.date, 'Category': e.category, 'Description': e.notes || '', 'Amount': e.amount, 'Payment Mode': e.payment_mode }));
         break;
       case 'suppliers':
-        cleanData = data.map(s => ({ id: s.id, name: s.name, contact: s.contact, email: s.email, city: s.city, gst: s.gst, category: s.category, payment_terms: s.payment_terms, balance: s.balance }));
+        cleanData = data.map(s => ({ 'Supplier Name': s.name, 'Contact': s.contact, 'Email': s.email, 'City': s.city, 'GSTIN': s.gst, 'Balance': s.balance }));
         break;
       case 'daily_transactions':
-        cleanData = data.map(dt => {
-          let tNo = dt.txn_no;
-          if (tNo) {
-            const m = String(tNo).match(/^(?:DTXN|D)-?(\d+)$/i);
-            if (m) {
-              let n = parseInt(m[1], 10);
-              if (n >= 1000) n = n - 1000;
-              tNo = `D-${String(n).padStart(2, '0')}`;
-            }
-          } else {
-            tNo = dt.id ? `D-${String(dt.id).padStart(2, '0')}` : '-';
-          }
-          return { id: dt.id, txn_no: tNo, client_name: dt.client_name, date: dt.date, total_amount: dt.total_amount, paid_amount: dt.paid_amount, notes: dt.notes };
-        });
+        cleanData = data.map(dt => ({ 'Txn No': dt.txn_no || dt.id, 'Client': dt.client_name, 'Date': dt.date, 'Total Amount': dt.total_amount, 'Paid Amount': dt.paid_amount }));
         break;
     }
     
     UTILS.exportToExcel(cleanData, label);
+    APP.showToast(`${label} exported to Excel!`, 'success');
   } catch (err) {
     APP.showToast('Export failed: ' + err.message, 'error');
   } finally {
     APP.hideSpinner();
-    if (document.activeElement && typeof document.activeElement.blur === 'function') {
-      document.activeElement.blur();
-    }
   }
 }
 
-async function exportCSV(tableName, label, evt) {
-  const triggerBtn = (evt && (evt.currentTarget || evt.target)) || (window.event && (window.event.currentTarget || window.event.target)) || document.activeElement;
+/**
+ * Clean Single Table Export (CSV)
+ */
+async function exportCSV(tableName, label) {
+  if (window.RBAC && !window.RBAC.hasPermission(tableName, 'export') && !window.RBAC.hasPermission('reports', 'export')) {
+    APP.showToast('You do not have permission to export this data', 'error');
+    return;
+  }
+
   try {
     APP.showSpinner();
     const data = await fetchExportData(tableName);
@@ -147,98 +138,290 @@ async function exportCSV(tableName, label, evt) {
     APP.showToast('Export failed: ' + err.message, 'error');
   } finally {
     APP.hideSpinner();
-    if (triggerBtn && typeof triggerBtn.blur === 'function') {
-      triggerBtn.blur();
-    }
-    if (document.activeElement && typeof document.activeElement.blur === 'function') {
-      document.activeElement.blur();
-    }
   }
 }
 
-async function exportAllToExcel() {
-  if (!window.XLSX) { APP.showToast('SheetJS not loaded', 'error'); return; }
+/**
+ * Export Analytical Calculated Registers (Customer Sales, Product SKUs, Monthly Trends)
+ */
+async function exportAnalyticalReport(reportType, format = 'excel') {
+  if (window.RBAC && !window.RBAC.hasPermission('reports', 'export')) {
+    APP.showToast('You do not have permission to export reports', 'error');
+    return;
+  }
+
   APP.showSpinner();
   try {
-    const wb = XLSX.utils.book_new();
-    const tables = ['clients', 'products', 'orders', 'purchases', 'transactions', 'expenses', 'suppliers', 'daily_transactions'];
-    const names = ['Clients', 'Products', 'Orders', 'Purchases', 'Transactions', 'Expenses', 'Suppliers', 'Daily Transactions'];
-    
-    for (let i = 0; i < tables.length; i++) {
-      const data = await fetchExportData(tables[i]);
-      if (data.length) {
-        const ws = XLSX.utils.json_to_sheet(data);
-        XLSX.utils.book_append_sheet(wb, ws, names[i]);
-      }
+    const fromEl = document.getElementById('export-date-from');
+    const toEl = document.getElementById('export-date-to');
+    const dateFrom = fromEl ? fromEl.value : '';
+    const dateTo = toEl ? toEl.value : '';
+
+    const filters = { dateFrom, dateTo };
+
+    // Fetch necessary analytical tables in parallel
+    const [
+      orders,
+      orderItems,
+      dispatches,
+      clients,
+      products,
+      packaging,
+      reversals
+    ] = await Promise.all([
+      fetchExportData('orders', dateFrom, dateTo),
+      fetchExportData('order_items'),
+      fetchExportData('order_dispatches', dateFrom, dateTo),
+      fetchExportData('clients'),
+      fetchExportData('products'),
+      fetchExportData('product_packaging'),
+      fetchExportData('dispatch_reversals')
+    ]);
+
+    const core = window.REPORTS_CORE ? window.REPORTS_CORE.Service : null;
+    if (!core) throw new Error('Reports Core Analytics Engine not loaded');
+
+    let exportData = [];
+    let fileLabel = '';
+
+    if (reportType === 'customer_sales') {
+      const report = core.getCustomerSalesReport({
+        orders,
+        orderItems,
+        dispatches,
+        dispatchItems: [],
+        clients,
+        invoices: [],
+        reversals,
+        filters
+      });
+      exportData = core.formatCustomerSalesForExport(report);
+      fileLabel = `Customer_Annual_Sales_Register_${dateFrom || 'All'}_to_${dateTo || 'All'}`;
+    } else if (reportType === 'product_skus') {
+      const report = core.getProductSalesReport({
+        orders,
+        orderItems,
+        products,
+        packaging,
+        reversals,
+        filters
+      });
+      exportData = core.formatProductSalesForExport(report);
+      fileLabel = `Product_SKU_Packaging_Breakdown_${dateFrom || 'All'}_to_${dateTo || 'All'}`;
+    } else if (reportType === 'monthly_trends') {
+      const report = core.getMonthlyTrendReport({
+        orders,
+        dispatches,
+        reversals,
+        filters
+      });
+      exportData = core.ExportFormatter.formatMonthlyTrendsForExport(report);
+      fileLabel = `Monthly_Commercial_Sales_Trends_${dateFrom || 'All'}_to_${dateTo || 'All'}`;
     }
-    
-    XLSX.writeFile(wb, `AgroChem_ERP_Full_Export_${UTILS.todayStr()}.xlsx`);
-    APP.showToast('Full database exported to Excel!', 'success');
-  } catch(e) {
-    APP.showToast('Export failed: ' + e.message, 'error');
+
+    if (!exportData || !exportData.length) {
+      APP.showToast('No records found for the selected dates', 'warning');
+      return;
+    }
+
+    if (format === 'excel' && window.XLSX) {
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, reportType.slice(0, 31));
+      XLSX.writeFile(wb, `${fileLabel}.xlsx`);
+      APP.showToast('Analytical report exported to Excel!', 'success');
+    } else {
+      const csvStr = core.generateCsvString(exportData, fileLabel.replace(/_/g, ' '));
+      const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${fileLabel}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      APP.showToast('Analytical report exported to CSV!', 'success');
+    }
+  } catch (err) {
+    console.error('exportAnalyticalReport error:', err);
+    APP.showToast('Export failed: ' + err.message, 'error');
   } finally {
     APP.hideSpinner();
-    if (document.activeElement && typeof document.activeElement.blur === 'function') {
-      document.activeElement.blur();
-    }
   }
 }
 
-function importDatabase() {
-  APP.showToast('Direct SQL database file import is disabled in MySQL server mode.', 'info');
-}
+/**
+ * Export Master Consolidated Multi-Sheet Excel Workbook
+ */
+async function exportFullConsolidatedWorkbook() {
+  if (!window.XLSX) { 
+    APP.showToast('SheetJS engine not loaded', 'error'); 
+    return; 
+  }
+  if (window.RBAC && !window.RBAC.hasPermission('reports', 'export')) {
+    APP.showToast('You do not have permission to export master workbooks', 'error');
+    return;
+  }
 
-function exportDatabase() {
-  APP.showToast('Direct SQL database file export is disabled. Use Excel full export instead.', 'info');
-}
+  APP.showSpinner();
+  try {
+    const fromEl = document.getElementById('export-date-from');
+    const toEl = document.getElementById('export-date-to');
+    const dateFrom = fromEl ? fromEl.value : '';
+    const dateTo = toEl ? toEl.value : '';
+    const filters = { dateFrom, dateTo };
 
-function eraseAllData() {
-  APP.showConfirm('⚠️ This will PERMANENTLY DELETE ALL DATA. You will be left with an empty database. Continue?', async () => {
-    APP.showSpinner();
-    try {
-      const res = await fetch('/api/database/reset', { method: 'POST' });
-      const result = await res.json();
-      if (!res.ok || !result.success) throw new Error(result.message || 'Failed to erase data');
-      
-      APP.showToast('Database cleared. Reloading...', 'warning');
-      setTimeout(() => {
-        window.location.href = 'dashboard.html';
-      }, 1000);
-    } catch (err) {
-      APP.showToast('Failed to reset database: ' + err.message, 'error');
-    } finally {
-      APP.hideSpinner();
+    const core = window.REPORTS_CORE ? window.REPORTS_CORE.Service : null;
+
+    const [
+      orders,
+      orderItems,
+      dispatches,
+      clients,
+      products,
+      packaging,
+      reversals,
+      purchases,
+      transactions,
+      expenses
+    ] = await Promise.all([
+      fetchExportData('orders', dateFrom, dateTo),
+      fetchExportData('order_items'),
+      fetchExportData('order_dispatches', dateFrom, dateTo),
+      fetchExportData('clients'),
+      fetchExportData('products'),
+      fetchExportData('product_packaging'),
+      fetchExportData('dispatch_reversals'),
+      fetchExportData('purchases', dateFrom, dateTo),
+      fetchExportData('transactions', dateFrom, dateTo),
+      fetchExportData('expenses', dateFrom, dateTo)
+    ]);
+
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Customer Sales Analytics with Totals
+    if (core) {
+      const custReport = core.getCustomerSalesReport({ orders, orderItems, dispatches, clients, reversals, filters });
+      const custData = core.formatCustomerSalesForExport(custReport);
+      if (custData.length) {
+        const ws = XLSX.utils.json_to_sheet(custData);
+        XLSX.utils.book_append_sheet(wb, ws, 'Customer_Sales');
+      }
+
+      // Sheet 2: Product & SKU Packaging Breakdown with Totals
+      const prodReport = core.getProductSalesReport({ orders, orderItems, products, packaging, reversals, filters });
+      const prodData = core.formatProductSalesForExport(prodReport);
+      if (prodData.length) {
+        const ws = XLSX.utils.json_to_sheet(prodData);
+        XLSX.utils.book_append_sheet(wb, ws, 'Product_SKUs');
+      }
+
+      // Sheet 3: Monthly Trends with Totals
+      const moReport = core.getMonthlyTrendReport({ orders, dispatches, reversals, filters });
+      const moData = core.ExportFormatter.formatMonthlyTrendsForExport(moReport);
+      if (moData.length) {
+        const ws = XLSX.utils.json_to_sheet(moData);
+        XLSX.utils.book_append_sheet(wb, ws, 'Monthly_Trends');
+      }
     }
-  });
+
+    // Sheet 4: Raw Orders
+    if (orders.length) {
+      const ws = XLSX.utils.json_to_sheet(orders.map(o => ({
+        'Order No': o.order_no,
+        'Client': o.client_name,
+        'Date': o.date,
+        'Order Status': o.status,
+        'Dispatch Status': o.dispatch_status || 'Pending',
+        'Billed Amount': o.total_amount,
+        'Paid Amount': o.paid_amount,
+        'Balance': (parseFloat(o.total_amount) || 0) - (parseFloat(o.paid_amount) || 0)
+      })));
+      XLSX.utils.book_append_sheet(wb, ws, 'Orders_Register');
+    }
+
+    // Sheet 5: Dispatches
+    if (dispatches.length) {
+      const ws = XLSX.utils.json_to_sheet(dispatches.map(d => ({
+        'Dispatch Slip': d.dispatch_no,
+        'Order Ref': d.order_no,
+        'Client': d.client_name,
+        'Date': d.dispatch_date,
+        'Vehicle': d.vehicle_no,
+        'Boxes': d.total_boxes_dispatched,
+        'Loose': d.total_loose_dispatched,
+        'Total Units': d.total_units_dispatched,
+        'Status': d.status
+      })));
+      XLSX.utils.book_append_sheet(wb, ws, 'Dispatches_Register');
+    }
+
+    // Sheet 6: Clients Master
+    if (clients.length) {
+      const ws = XLSX.utils.json_to_sheet(clients.map(c => ({
+        'ID': c.id,
+        'Name': c.name,
+        'Contact': c.contact,
+        'City': c.city,
+        'Type': c.type,
+        'Credit Limit': c.credit_limit,
+        'Balance': c.balance
+      })));
+      XLSX.utils.book_append_sheet(wb, ws, 'Clients_Master');
+    }
+
+    // Sheet 7: Products Master
+    if (products.length) {
+      const ws = XLSX.utils.json_to_sheet(products.map(p => ({
+        'ID': p.id,
+        'Name': p.name,
+        'Unit': p.unit,
+        'Cost Price': p.purchase_price,
+        'Selling Price': p.sell_price
+      })));
+      XLSX.utils.book_append_sheet(wb, ws, 'Products_Master');
+    }
+
+    const filename = `AgroChem_ERP_Master_Consolidated_Report_${UTILS.todayStr()}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    APP.showToast('Master multi-sheet Excel workbook exported successfully!', 'success');
+  } catch(e) {
+    console.error('exportFullConsolidatedWorkbook error:', e);
+    APP.showToast('Master export failed: ' + e.message, 'error');
+  } finally {
+    APP.hideSpinner();
+  }
 }
 
+/**
+ * Set Extended Date Presets
+ */
 function setExportPreset(type) {
   const fromEl = document.getElementById('export-date-from');
   const toEl = document.getElementById('export-date-to');
   if (!fromEl || !toEl) return;
-  
-  const today = new Date();
-  const todayStr = UTILS.todayStr(); // YYYY-MM-DD
-  
+
+  const core = window.REPORTS_CORE ? window.REPORTS_CORE.DateRangeHelper : null;
+  if (!core) return;
+
+  let presetKey = 'financial_year';
   switch(type) {
-    case 'today':
-      fromEl.value = todayStr;
-      toEl.value = todayStr;
-      break;
-    case 'month':
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-      fromEl.value = firstDay.toISOString().split('T')[0];
-      toEl.value = todayStr;
-      break;
-    case 'year':
-      fromEl.value = today.getFullYear() + '-01-01';
-      toEl.value = todayStr;
-      break;
+    case 'today': presetKey = 'today'; break;
+    case 'week': presetKey = 'week'; break;
+    case 'month': presetKey = 'month'; break;
+    case 'quarter': presetKey = 'quarter'; break;
+    case 'fy': presetKey = 'financial_year'; break;
+    case 'year': presetKey = 'calendar_year'; break;
     case 'all':
       fromEl.value = '';
       toEl.value = '';
-      break;
+      return;
   }
+
+  const range = core.computeDateRange(presetKey);
+  fromEl.value = range.from;
+  toEl.value = range.to;
 }
 
 function selectAllExportModules(status) {
@@ -277,7 +460,6 @@ async function bulkExportCSV() {
   }
   
   APP.showSpinner();
-  
   let exportCount = 0;
   
   for (let i = 0; i < selectedTables.length; i++) {
@@ -286,92 +468,34 @@ async function bulkExportCSV() {
       const data = await fetchExportData(table.id, from, to);
       
       if (data.length === 0) {
-        APP.showToast(`No data found in ${table.label} for the selected dates`, 'warning');
         continue;
       }
       
-      let rangeTag = 'All_Time';
-      if (from && to) {
-        rangeTag = `${from}_to_${to}`;
-      } else if (from) {
-        rangeTag = `from_${from}`;
-      } else if (to) {
-        rangeTag = `to_${to}`;
-      }
-      
+      let rangeTag = (from && to) ? `${from}_to_${to}` : 'All_Time';
       const fileName = `${table.label}_${rangeTag}`;
       UTILS.exportToCSV(data, fileName);
       exportCount++;
-      
       await new Promise(resolve => setTimeout(resolve, 150));
     } catch (err) {
       console.error(`Failed to export ${table.label}:`, err);
-      APP.showToast(`Failed to export ${table.label}`, 'error');
     }
   }
   
   APP.hideSpinner();
-  if (document.activeElement && typeof document.activeElement.blur === 'function') {
-    document.activeElement.blur();
-  }
   if (exportCount > 0) {
     APP.showToast(`Successfully exported ${exportCount} modules to CSV!`, 'success');
+  } else {
+    APP.showToast('No records found to export', 'warning');
   }
 }
 
-async function downloadBackup() {
-  try {
-    APP.showSpinner();
-    const tables = ['clients', 'suppliers', 'products', 'inventory_items', 'orders', 'order_items', 'purchases', 'purchase_items', 'transactions', 'accounts', 'expenses', 'daily_transactions', 'daily_transaction_items', 'formulations', 'formulation_ingredients'];
-    
-    const backupData = {
-      timestamp: new Date().toISOString(),
-      version: '1.0',
-      tables: {}
-    };
-
-    for (const t of tables) {
-      try {
-        const { data } = await window.dbClient.from(t).select('*');
-        backupData.tables[t] = data || [];
-      } catch (e) {
-        console.warn('Backup skip table', t, e);
-      }
-    }
-
-    const jsonStr = JSON.stringify(backupData, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Anjani_ERP_Backup_${UTILS.todayStr()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    APP.showToast('Database backup downloaded successfully!', 'success');
-  } catch (err) {
-    console.error('Backup download error:', err);
-    APP.showToast('Failed to download backup: ' + err.message, 'error');
-  } finally {
-    APP.hideSpinner();
-    if (document.activeElement && typeof document.activeElement.blur === 'function') {
-      document.activeElement.blur();
-    }
-  }
-}
-
-// Bind to window for inline HTML access
+// Window global bindings
 window.setExportPreset = setExportPreset;
 window.selectAllExportModules = selectAllExportModules;
 window.bulkExportCSV = bulkExportCSV;
 window.exportTable = exportTable;
 window.exportCSV = exportCSV;
-window.exportAllToExcel = exportAllToExcel;
-window.importDatabase = importDatabase;
-window.exportDatabase = exportDatabase;
-window.downloadBackup = downloadBackup;
-window.eraseAllData = eraseAllData;
+window.exportAnalyticalReport = exportAnalyticalReport;
+window.exportFullConsolidatedWorkbook = exportFullConsolidatedWorkbook;
 
 loadExports();

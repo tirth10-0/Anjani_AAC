@@ -20,7 +20,7 @@
             z-index: 1002;
         }
         .theme-toggle:hover {
-            background: #0C3925;
+            background: #08281A;
             color: #fff;
         }
         .theme-toggle .material-symbols-outlined {
@@ -49,7 +49,7 @@
             border-bottom: none;
         }
         .suggestion-item:hover, .suggestion-item:focus {
-            background: #0C3925;
+            background: #08281A;
             color: #fff;
         }
 
@@ -89,7 +89,7 @@
             padding: 10px 18px;
             border-radius: 8px;
             border: none;
-            background: #0C3925;
+            background: #08281A;
             color: #fff;
             font-size: 15px;
             cursor: pointer;
@@ -139,7 +139,7 @@
         .login-logo {
             font-size: 28px;
             font-weight: 800;
-            color: #0C3925;
+            color: #08281A;
             margin-bottom: 6px;
             letter-spacing: -0.5px
         }
@@ -165,13 +165,13 @@
         }
 
         .login-field:focus {
-            border-color: #0C3925
+            border-color: #08281A
         }
 
         .login-btn {
             width: 100%;
             padding: 14px;
-            background: #0C3925;
+            background: #08281A;
             color: #fff;
             font-size: 15px;
             font-weight: 700;
@@ -182,7 +182,7 @@
         }
 
         .login-btn:hover {
-            background: #0C3925
+            background: #08281A
         }
 
         .login-hint {
@@ -260,7 +260,7 @@
 
         .autocomplete-brand {
             font-weight: 600;
-            color: #0C3925;
+            color: #08281A;
         }
 
         .autocomplete-desc {
@@ -271,7 +271,7 @@
 
         .autocomplete-price {
             font-size: 11px;
-            color: #0C3925;
+            color: #08281A;
             font-weight: 600;
             margin-top: 2px;
         }
@@ -305,7 +305,7 @@
         .toolbar-brand {
             font-size: 20px;
             font-weight: 800;
-            color: #0C3925;
+            color: #08281A;
             letter-spacing: -0.5px
         }
 
@@ -334,12 +334,12 @@
         }
 
         .btn-primary {
-            background: #0C3925;
+            background: #08281A;
             color: #fff
         }
 
         .btn-primary:hover {
-            background: #0C3925
+            background: #08281A
         }
 
         .btn-ghost {
@@ -411,7 +411,7 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1px;
-            color: #0C3925;
+            color: #08281A;
             margin-bottom: 12px;
             display: flex;
             align-items: center;
@@ -441,7 +441,7 @@
         }
 
         .sb-input:focus {
-            border-color: #0C3925
+            border-color: #08281A
         }
 
         .sb-input::placeholder {
@@ -501,7 +501,7 @@
         }
 
         .toggle input:checked+.toggle-track {
-            background: #0C3925
+            background: #08281A
         }
 
         .toggle-nub {
@@ -532,7 +532,7 @@
         }
 
         .logo-upload-area:hover {
-            border-color: #0C3925
+            border-color: #08281A
         }
 
         .logo-upload-area input {
@@ -599,7 +599,7 @@
             gap: 12px;
             margin-bottom: 28px;
             padding-bottom: 24px;
-            border-bottom: 3px solid #0C3925
+            border-bottom: 3px solid #08281A
         }
 
         .paper-logo-section {
@@ -681,7 +681,7 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1.2px;
-            color: #0C3925;
+            color: #08281A;
             margin-bottom: 6px
         }
 
@@ -864,8 +864,8 @@
             align-items: center;
             gap: 6px;
             background: none;
-            border: 1px dashed #0C3925;
-            color: #0C3925;
+            border: 1px dashed #08281A;
+            color: #08281A;
             font-size: 12px;
             font-weight: 600;
             padding: 7px 14px;
@@ -911,7 +911,7 @@
             display: flex;
             justify-content: space-between;
             padding: 12px 16px;
-            background: #064e3b;
+            background: #08281A !important;
             color: #fff;
             font-size: 15px;
             font-weight: 700
@@ -937,7 +937,7 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1px;
-            color: #0C3925;
+            color: #08281A;
             margin-bottom: 10px
         }
 
@@ -1025,7 +1025,7 @@
         .mob-item-num {
             font-size: 11px;
             font-weight: 700;
-            color: #0C3925;
+            color: #08281A;
             text-transform: uppercase;
             letter-spacing: 0.6px
         }
@@ -1060,7 +1060,7 @@
 
         .mob-item-total-value {
             font-weight: 700;
-            color: #0C3925;
+            color: #08281A;
             font-size: 14px
         }
 
@@ -1071,8 +1071,8 @@
             gap: 8px;
             width: 100%;
             background: none;
-            border: 2px dashed #0C3925;
-            color: #0C3925;
+            border: 2px dashed #08281A;
+            color: #08281A;
             font-size: 14px;
             font-weight: 600;
             padding: 14px 16px;
@@ -1154,10 +1154,10 @@
         }
 
         .mob-tab:hover {
-            color: #0C3925 !important;
+            color: #08281A !important;
         }
         .mob-tab:hover .material-symbols-outlined {
-            color: #0C3925 !important;
+            color: #08281A !important;
         }
 
         [data-theme="dark"] .mob-tab:hover {
@@ -1165,7 +1165,7 @@
         }
 
         .mob-tab.active {
-            background: #0C3925 !important;
+            background: #08281A !important;
             color: #ffffff !important;
             border-radius: 12px !important;
             padding: 6px 4px !important;

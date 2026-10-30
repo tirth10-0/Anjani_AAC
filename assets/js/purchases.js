@@ -10,20 +10,35 @@ function updatePageDebug(text, color) {
   }
 }
 
+let isLoadingPurchases = false;
+let pendingPurchasesReload = false;
+
 async function loadPurchases() {
+  if (isLoadingPurchases) {
+    pendingPurchasesReload = true;
+    return;
+  }
+  isLoadingPurchases = true;
   console.log('Loading purchases...');
   updatePageDebug('Loading Purchases...', '#0C3925');
   
   try {
     UTILS.renderTableSkeleton('purchases-table');
     await DB.initDB();
+    if (window.TENANT_CONTEXT && window.TENANT_CONTEXT.init) {
+      await window.TENANT_CONTEXT.init();
+    }
     
     // Load purchasable items, purchases, suppliers, and purchase_items in parallel
+    const pQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('purchases').select('*').order('id', { ascending: false })) : window.dbClient.from('purchases').select('*').order('id', { ascending: false });
+    const supQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('suppliers').select('*')) : window.dbClient.from('suppliers').select('*');
+    const piQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('purchase_items').select('*')) : window.dbClient.from('purchase_items').select('*');
+
     const [, pRes, supRes, piRes] = await Promise.all([
       refreshPurchasableItems(),
-      window.dbClient.from('purchases').select('*').order('id', { ascending: false }),
-      window.dbClient.from('suppliers').select('*'),
-      window.dbClient.from('purchase_items').select('*')
+      pQuery,
+      supQuery,
+      piQuery
     ]);
 
     if (pRes.error) throw pRes.error;
@@ -39,6 +54,7 @@ async function loadPurchases() {
 
     allPurchases = UTILS.sortLatestFirst(allPurchases, p => p.purchase_no || p.id);
     renderTable(allPurchases);
+    if (typeof window !== 'undefined') window.allPurchases = allPurchases;
     await populateSupplierSelect();
     
     updatePageDebug('Ready (' + allPurchases.length + ')', '#0C3925');
@@ -46,31 +62,49 @@ async function loadPurchases() {
     
     console.log('Purchases: All data loaded successfully');
 
-  // Attach search listener
-  const searchInput = document.getElementById('search-input');
-  if (searchInput) {
-    searchInput.addEventListener('input', filterAndRender);
-  }
+    // Attach debounced search listener
+    const searchInput = document.getElementById('search-input');
+    if (searchInput && !searchInput.dataset.listenerAttached) {
+      searchInput.dataset.listenerAttached = 'true';
+      searchInput.addEventListener('input', (typeof UTILS !== 'undefined' && UTILS.debounce) ? UTILS.debounce(filterAndRender, 250) : filterAndRender);
+    }
 
   } catch (err) {
     console.error('Purchases loadPurchases failed:', err);
     updatePageDebug('FAILED', '#EF4444');
     APP.showToast('Failed to load purchases: ' + err.message, 'error');
+  } finally {
+    isLoadingPurchases = false;
+    if (pendingPurchasesReload) {
+      pendingPurchasesReload = false;
+      loadPurchases();
+    }
   }
 }
 
 async function refreshPurchasableItems() {
   try {
+    const prodQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('products').select('id, name, unit, item_size, packaging')) : window.dbClient.from('products').select('id, name, unit, item_size, packaging');
+    const invQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('inventory_items').select('id, name, unit, item_size')) : window.dbClient.from('inventory_items').select('id, name, unit, item_size');
+
     const [pRes, iRes] = await Promise.all([
-      window.dbClient.from('products').select('id, name, unit, item_size, packaging'),
-      window.dbClient.from('inventory_items').select('id, name, unit, item_size')
+      prodQuery,
+      invQuery
     ]);
     const p = pRes.data || [];
     const i = iRes.data || [];
     
     const combined = [
-      ...i.map(x => ({ id: x.id, name: x.name, unit: x.unit || 'Nos', type: 'Inventory', item_size: x.item_size })),
-      ...p.map(x => ({ id: x.id, name: x.name, unit: x.unit || 'Nos', type: 'Catalog', item_size: x.item_size || x.packaging }))
+      ...i.map(x => {
+        const cName = (typeof UTILS !== 'undefined' && UTILS.cleanItemName) ? UTILS.cleanItemName(x.name) : (x.name || '');
+        const cUnit = (typeof UTILS !== 'undefined' && UTILS.cleanUnitLabel) ? UTILS.cleanUnitLabel(x.unit || 'Nos') : (x.unit || 'Nos');
+        return { id: x.id, name: cName, rawName: x.name, unit: cUnit, type: 'Inventory', item_size: x.item_size };
+      }),
+      ...p.map(x => {
+        const cName = (typeof UTILS !== 'undefined' && UTILS.cleanItemName) ? UTILS.cleanItemName(x.name) : (x.name || '');
+        const cUnit = (typeof UTILS !== 'undefined' && UTILS.cleanUnitLabel) ? UTILS.cleanUnitLabel(x.unit || 'Nos') : (x.unit || 'Nos');
+        return { id: x.id, name: cName, rawName: x.name, unit: cUnit, type: 'Catalog', item_size: x.item_size || x.packaging };
+      })
     ];
     
     const map = new Map();
@@ -78,51 +112,289 @@ async function refreshPurchasableItems() {
       if (!x.name) return;
       const key = x.name.trim().toLowerCase();
       if (!map.has(key)) {
-        map.set(key, { id: x.id, name: x.name.trim(), unit: x.unit || 'Nos', type: x.type, item_size: x.item_size });
+        map.set(key, { id: x.id, name: x.name.trim(), rawName: x.rawName, unit: x.unit || 'Nos', type: x.type, item_size: x.item_size });
       }
     });
 
     purchasableItems = Array.from(map.values());
+    if (typeof window !== 'undefined') window.purchasableItems = purchasableItems;
   } catch (err) {
     console.error('refreshPurchasableItems failed:', err);
   }
 }
 
-function renderTable(data) {
+let purchasesTableEnhancer = null;
+
+const safeEscape = (str) => {
+  if (typeof escapeHtml === 'function') return escapeHtml(str);
+  if (typeof window !== 'undefined' && window.UTILS && typeof window.UTILS.escapeHtml === 'function') return window.UTILS.escapeHtml(str);
+  return String(str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+};
+
+function renderPurchasesSlice(data) {
   const tbody = document.querySelector('#purchases-table tbody');
   if (!tbody) return;
-  document.getElementById('total-info').textContent = `${data.length} purchase${data.length !== 1 ? 's' : ''}`;
-  if (!data.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="10"><div class="empty-state"><h3>No purchases found</h3></div></td></tr>`;
-    return;
-  }
   tbody.innerHTML = data.map(p => {
     let itemsHtml = '—';
     if (p.items && p.items.length > 0) {
-      itemsHtml = p.items.map(it => {
-        const u = it.unit ? ` ${it.unit.trim()}` : '';
-        const qtyText = it.quantity !== undefined && it.quantity !== null ? `${it.quantity}${u}` : '';
+      const count = p.items.length;
+      const formatTag = (it) => {
+        const fullName = (typeof UTILS !== 'undefined' && UTILS.cleanItemName) ? UTILS.cleanItemName(it.item_name || 'Item') : (it.item_name || 'Item');
+        const cUnit = (typeof UTILS !== 'undefined' && UTILS.cleanUnitLabel) ? UTILS.cleanUnitLabel(it.unit || '') : (it.unit || '');
+        const u = cUnit ? ` ${cUnit.trim()}` : '';
+        const rawQty = it.quantity !== undefined && it.quantity !== null ? `${it.quantity}${u}` : '';
+        const qtyText = (typeof UTILS !== 'undefined' && UTILS.cleanUnitLabel) ? UTILS.cleanUnitLabel(rawQty) : rawQty;
         const qtyBadge = qtyText ? `<span class="purchase-item-qty">(${qtyText})</span>` : '';
-        return `<span class="purchase-item-tag"><span class="purchase-item-name">${it.item_name || 'Item'}</span>${qtyBadge}</span>`;
-      }).join(', ');
+        return `<span class="purchase-item-tag" title="${safeEscape(fullName)}"><span class="purchase-item-name">${safeEscape(fullName)}</span>${qtyBadge}</span>`;
+      };
+
+      if (count <= 2) {
+        itemsHtml = `<div class="purchase-items-summary-wrap">${p.items.map(formatTag).join('')}</div>`;
+      } else {
+        const firstTwo = p.items.slice(0, 2).map(formatTag).join('');
+        const remaining = count - 2;
+        itemsHtml = `<div class="purchase-items-summary-wrap">${firstTwo}<button type="button" class="purchase-more-badge" onclick="viewPurchase(${p.id})" title="Click to view all ${count} items in structured detail">+${remaining} more</button></div>`;
+      }
     }
 
+    const total = parseFloat(p.total_amount) || 0;
+    const paid = parseFloat(p.paid_amount) || 0;
+    const balance = (parseFloat(p.total_amount) || 0) - (parseFloat(p.paid_amount) || 0);
+    const balanceText = UTILS.fmtCurrency(balance);
+    const balanceClass = balance > 0.01 ? 'text-danger' : 'text-success';
+    const dateFormatted = UTILS.fmtDate(p.date);
+
     return `<tr>
-      <td class="cell-bold">${p.purchase_no}</td>
-      <td class="cell-mono">${p.invoice_no || '—'}</td>
-      <td>${p.supplier_display || '—'}</td>
-      <td class="cell-items-summary">${itemsHtml}</td>
-      <td>${UTILS.fmtDate(p.date)}</td>
-      <td class="cell-amount">${UTILS.fmtCurrency(p.total_amount)}</td>
-      <td class="cell-amount">${UTILS.fmtCurrency(p.paid_amount || 0)}</td>
-      <td class="cell-amount text-danger">${UTILS.fmtCurrency((parseFloat(p.total_amount) || 0) - (parseFloat(p.paid_amount) || 0))}</td>
-      <td><div class="row-actions">
+      <td class="col-purchaseno cell-bold">
+        <div class="purchase-header-stack">
+          <div class="purchase-primary-id">${safeEscape(p.purchase_no)}</div>
+          ${p.invoice_no ? `<span class="sub-invoice-tag badge-mono">Inv: ${safeEscape(p.invoice_no)}</span>` : ''}
+        </div>
+        <div class="sub-date-mobile">${dateFormatted}</div>
+      </td>
+      <td class="col-invoiceno cell-mono">${safeEscape(p.invoice_no || '—')}</td>
+      <td class="col-supplier">
+        <div class="supplier-primary-name">${safeEscape(p.supplier_display || '—')}</div>
+        <div class="sub-date-tag">${dateFormatted}</div>
+      </td>
+      <td class="col-items cell-items-summary">${itemsHtml}</td>
+      <td class="col-date">${dateFormatted}</td>
+      <td class="col-total cell-amount">
+        <div class="total-primary-amount">${UTILS.fmtCurrency(total)}</div>
+        <div class="sub-balance-tag ${balanceClass}">Bal: ${balanceText}</div>
+      </td>
+      <td class="col-paid cell-amount text-success">${UTILS.fmtCurrency(paid)}</td>
+      <td class="col-balance cell-amount ${balanceClass}">${balanceText}</td>
+      <td class="col-actions"><div class="row-actions">
+        <button class="action-btn view" onclick="viewPurchase(${p.id})" title="View Purchase Details"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
         <button class="action-btn edit" onclick="openEdit(${p.id})" title="Edit Purchase"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
         <button class="action-btn delete" onclick="deletePurchase(${p.id})" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
       </div></td>
     </tr>`;
   }).join('');
   UTILS.applyMobileTableLabels('purchases-table');
+}
+
+async function viewPurchase(id) {
+  let p = (allPurchases || []).find(x => String(x.id) === String(id));
+  if (!p || !Array.isArray(p.items) || !p.items.length) {
+    try {
+      const { data: dbP } = await window.dbClient.from('purchases').select('*').eq('id', id).maybeSingle();
+      if (dbP) {
+        const { data: itData } = await window.dbClient.from('purchase_items').select('*').eq('purchase_id', id);
+        dbP.items = itData || [];
+        p = dbP;
+      }
+    } catch (_) {}
+  }
+  if (!p) {
+    if (typeof APP !== 'undefined' && APP.showToast) APP.showToast('Purchase record not found', 'error');
+    return;
+  }
+
+  const modalTitle = document.getElementById('purchase-view-title');
+  if (modalTitle) modalTitle.textContent = `Purchase Details — ${p.purchase_no || 'P-' + p.id}`;
+
+  const viewContent = document.getElementById('purchase-view-content');
+  if (!viewContent) return;
+
+  const total = parseFloat(p.total_amount) || 0;
+  const paid = parseFloat(p.paid_amount) || 0;
+  const balance = Math.max(0, total - paid);
+  const statusVal = p.status || 'Delivered';
+  const isDelivered = statusVal.toLowerCase() === 'delivered';
+  const statusBadge = `<span class="badge ${isDelivered ? 'badge-success' : 'badge-warning'}">${statusVal}</span>`;
+  const supplierName = p.supplier_display || p.supplier_name || '—';
+
+  let itemsHtml = (p.items || []).map((it, idx) => {
+    const cName = (typeof UTILS !== 'undefined' && UTILS.cleanItemName) ? UTILS.cleanItemName(it.item_name || 'Item') : (it.item_name || 'Item');
+    const cUnit = (typeof UTILS !== 'undefined' && UTILS.cleanUnitLabel) ? UTILS.cleanUnitLabel(it.unit || '') : (it.unit || '');
+    const u = cUnit ? ` ${cUnit.trim()}` : '';
+    const qty = it.quantity !== undefined && it.quantity !== null ? it.quantity : 0;
+    const price = parseFloat(it.unit_price) || 0;
+    const lineTotal = parseFloat(it.total) || (qty * price);
+    const expiry = it.expiry_date ? (typeof UTILS !== 'undefined' ? UTILS.fmtDate(it.expiry_date) : it.expiry_date.split('T')[0]) : '—';
+
+    return `
+      <tr class="purchase-detail-row" style="border-bottom:1px solid var(--border);">
+        <td class="col-idx" data-label="#" style="text-align:center; color:var(--text-muted); font-size:12px; padding:10px 6px;">${idx + 1}</td>
+        <td class="col-name" data-label="Item Name" style="font-weight:600; color:var(--text-primary); word-break:break-word; padding:10px 10px;">
+          ${safeEscape(cName)}
+        </td>
+        <td class="col-expiry" data-label="Expiry" style="font-size:12px; color:var(--text-secondary); padding:10px 8px;">${expiry}</td>
+        <td class="col-qty" data-label="Qty" style="text-align:right; font-weight:700; color:var(--text-primary); white-space:nowrap; padding:10px 8px;">${qty}${u}</td>
+        <td class="col-price" data-label="Unit Price" style="text-align:right; color:var(--text-secondary); white-space:nowrap; padding:10px 8px;">${typeof UTILS !== 'undefined' ? UTILS.fmtCurrency(price) : '₹' + price.toFixed(2)}</td>
+        <td class="col-linetotal" data-label="Total" style="text-align:right; font-weight:700; color:var(--accent, #059669); white-space:nowrap; padding:10px 10px;">${typeof UTILS !== 'undefined' ? UTILS.fmtCurrency(lineTotal) : '₹' + lineTotal.toFixed(2)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  if (!itemsHtml) {
+    itemsHtml = `<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--text-muted);">No line items recorded for this purchase.</td></tr>`;
+  }
+
+  viewContent.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <!-- Header Banner / Cards -->
+      <div style="background:var(--surface, #ffffff); border:1px solid var(--border); border-radius:10px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.03);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:18px; font-weight:800; color:var(--primary);">${safeEscape(p.purchase_no || 'P-' + p.id)}</span>
+              ${p.invoice_no ? `<span class="badge badge-neutral" style="font-family:monospace;">Inv: ${safeEscape(p.invoice_no)}</span>` : ''}
+              ${statusBadge}
+            </div>
+            <h4 style="margin:6px 0 0; font-size:15px; font-weight:700; color:var(--text-primary);">
+              Supplier: ${safeEscape(supplierName)}
+            </h4>
+          </div>
+          <div style="text-align:right; font-size:12.5px; color:var(--text-muted);">
+            <div>Booked: <strong style="color:var(--text-primary);">${typeof UTILS !== 'undefined' ? UTILS.fmtDate(p.date) : p.date}</strong></div>
+            ${p.due_date ? `<div>Due: <strong style="color:var(--text-primary);">${typeof UTILS !== 'undefined' ? UTILS.fmtDate(p.due_date) : p.due_date}</strong></div>` : ''}
+          </div>
+        </div>
+
+        <!-- 4 Financial Metric Cards -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
+          <div style="background:var(--bg); padding:10px 12px; border-radius:8px; border:1px solid var(--border);">
+            <span style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--text-muted); display:block; margin-bottom:2px;">Total Amount</span>
+            <span style="font-size:15px; font-weight:800; color:var(--text-primary);">${typeof UTILS !== 'undefined' ? UTILS.fmtCurrency(total) : '₹' + total.toFixed(2)}</span>
+          </div>
+          <div style="background:var(--bg); padding:10px 12px; border-radius:8px; border:1px solid var(--border);">
+            <span style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--text-muted); display:block; margin-bottom:2px;">Amount Paid</span>
+            <span style="font-size:15px; font-weight:800; color:var(--success, #10b981);">${typeof UTILS !== 'undefined' ? UTILS.fmtCurrency(paid) : '₹' + paid.toFixed(2)}</span>
+          </div>
+          <div style="background:var(--bg); padding:10px 12px; border-radius:8px; border:1px solid var(--border);">
+            <span style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--text-muted); display:block; margin-bottom:2px;">Balance Due</span>
+            <span style="font-size:15px; font-weight:800; color:${balance > 0 ? 'var(--danger, #ef4444)' : 'var(--success, #10b981)'};">${typeof UTILS !== 'undefined' ? UTILS.fmtCurrency(balance) : '₹' + balance.toFixed(2)}</span>
+          </div>
+          <div style="background:var(--bg); padding:10px 12px; border-radius:8px; border:1px solid var(--border);">
+            <span style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--text-muted); display:block; margin-bottom:2px;">Line Items</span>
+            <span style="font-size:15px; font-weight:800; color:var(--text-primary);">${(p.items || []).length} items</span>
+          </div>
+        </div>
+
+        <!-- Inward Logistics Route (Source & Destination) -->
+        <div class="dispatch-route-card-block inward-route-block" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+          <div class="dispatch-route-col" style="background:rgba(12,57,37,0.06); padding:10px 12px; border-radius:6px; border:1px solid rgba(12,57,37,0.18);">
+            <div class="dispatch-route-label" style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; color:var(--primary); margin-bottom:4px;">SOURCE (SUPPLIER)</div>
+            <div class="dispatch-route-val" style="font-weight:700; font-size:13px; color:var(--text);">${safeEscape(supplierName)}</div>
+            <div class="dispatch-route-sub" style="font-size:10.5px; color:var(--text-muted); margin-top:2px;">Commercial Inward Vendor</div>
+          </div>
+          <div class="dispatch-route-col dispatch-dest-col" style="background:rgba(2,132,199,0.06); padding:10px 12px; border-radius:6px; border:1px solid rgba(2,132,199,0.18);">
+            <div class="dispatch-route-label" style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; color:#0284c7; margin-bottom:4px;">DESTINATION (RECEIVING GODOWN)</div>
+            <div class="dispatch-route-val" style="font-weight:700; font-size:13px; color:var(--text);">${(() => {
+              const whName = p.items && p.items[0]?.warehouse;
+              return whName || 'Main Plant Warehouse (WH-E-01)';
+            })()}</div>
+            <div class="dispatch-route-sub" style="font-size:10.5px; color:var(--text-muted); margin-top:2px;">Inward Stock Storage Facility</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Line Items Section -->
+      <div>
+        <h4 style="font-size:13.5px; font-weight:700; margin:0 0 8px; color:var(--text-primary);">Purchased Items (${(p.items || []).length})</h4>
+        <div class="purchase-detail-table-wrap table-scroll-wrap" style="width:100%; border:1px solid var(--border); border-radius:8px; box-sizing:border-box; overflow-x:auto; -webkit-overflow-scrolling:touch;">
+          <table class="data-table purchase-detail-items-table" id="purchase-detail-items-table" style="margin:0; width:100%; min-width:560px; border-collapse:collapse;">
+            <thead>
+              <tr style="background:var(--bg); border-bottom:1px solid var(--border);">
+                <th style="width:6%; min-width:32px; text-align:center; padding:9px 6px; font-size:11.5px; white-space:nowrap;">#</th>
+                <th style="width:44%; min-width:160px; padding:9px 10px; font-size:11.5px; text-align:left; white-space:nowrap;">Item Name</th>
+                <th style="width:15%; min-width:90px; padding:9px 8px; font-size:11.5px; text-align:left; white-space:nowrap;">Expiry</th>
+                <th style="width:11%; min-width:70px; padding:9px 8px; font-size:11.5px; text-align:right; white-space:nowrap;">Qty</th>
+                <th style="width:11%; min-width:90px; padding:9px 8px; font-size:11.5px; text-align:right; white-space:nowrap;">Unit Price</th>
+                <th style="width:13%; min-width:95px; padding:9px 10px; font-size:11.5px; text-align:right; white-space:nowrap;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+            <tfoot>
+              <tr style="background:var(--bg); font-weight:700; border-top:2px solid var(--border);">
+                <td colspan="3" style="text-align:right; padding:10px 12px; font-size:12.5px;">Grand Total:</td>
+                <td style="text-align:right; padding:10px 8px; font-size:12.5px;">${(p.items || []).reduce((s, it) => s + (parseFloat(it.quantity) || 0), 0)}</td>
+                <td></td>
+                <td style="text-align:right; padding:10px 10px; font-size:13.5px; color:var(--accent, #059669); font-weight:800;">${typeof UTILS !== 'undefined' ? UTILS.fmtCurrency(total) : '₹' + total.toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Notes Section -->
+      ${p.notes ? `
+        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
+          <strong style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Notes / Observations:</strong>
+          <p style="margin:0; font-size:13px; color:var(--text-secondary); white-space:pre-wrap;">${safeEscape(p.notes)}</p>
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  const editBtn = document.getElementById('purchase-view-edit-btn');
+  if (editBtn) {
+    editBtn.onclick = () => {
+      APP.closeModal('purchase-view-modal');
+      openEdit(p.id);
+    };
+  }
+
+  APP.openModal('purchase-view-modal');
+}
+window.viewPurchase = viewPurchase;
+
+function renderTable(data) {
+  const tbody = document.querySelector('#purchases-table tbody');
+  if (!tbody) return;
+  const countEl = document.getElementById('total-info');
+  if (countEl) countEl.textContent = `${data.length} purchase${data.length !== 1 ? 's' : ''}`;
+  if (!data.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="10"><div class="empty-state"><h3>No purchases found</h3></div></td></tr>`;
+    const pag = document.querySelector('.table-wrap .pagination, #purchases-table-wrap .pagination');
+    if (pag) {
+      pag.innerHTML = '';
+      pag.style.display = 'none';
+    }
+    return;
+  }
+
+  if (window.TableEnhancer) {
+    if (!purchasesTableEnhancer) {
+      purchasesTableEnhancer = new window.TableEnhancer({
+        tableId: 'purchases-table',
+        pageSize: 25,
+        defaultSortKey: 'id',
+        defaultSortOrder: 'desc',
+        onRender: (pageSlice) => renderPurchasesSlice(pageSlice)
+      });
+      window.purchasesTableEnhancer = purchasesTableEnhancer;
+    }
+    purchasesTableEnhancer.setData(data);
+    return;
+  }
+
+  renderPurchasesSlice(data.slice(0, 50));
 }
 
 function filterAndRender() {
@@ -212,8 +484,11 @@ async function openEdit(id) {
 
     purchaseItems = p.items || [];
     
-    // Map items list correctly
+    // Map items list correctly and clean duplicate box names
     purchaseItems.forEach(it => {
+      if (typeof UTILS !== 'undefined' && UTILS.cleanItemName) {
+        it.item_name = UTILS.cleanItemName(it.item_name);
+      }
       it.total = (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0);
     });
 
@@ -227,16 +502,21 @@ async function openEdit(id) {
 
 async function getNextPurchaseBatchNo(offset = 0) {
   try {
-    const [{ data: batches }, { data: purItems }] = await Promise.all([
+    const [{ data: batches }, { data: purItems }, { data: existingPurchases }] = await Promise.all([
       window.dbClient.from('stock_batches').select('batch_no'),
-      window.dbClient.from('purchase_items').select('batch_no')
+      window.dbClient.from('purchase_items').select('batch_no'),
+      window.dbClient.from('purchases').select('purchase_no')
     ]);
       
     let maxNum = 0;
-    const all = [...(batches || []), ...(purItems || [])];
+    const all = [
+      ...(batches || []),
+      ...(purItems || []),
+      ...(existingPurchases || []).map(p => ({ batch_no: p.purchase_no }))
+    ];
     for (const b of all) {
       if (b.batch_no && typeof b.batch_no === 'string') {
-        const match = b.batch_no.match(/^(?:PUR|P)-(d+)$/i);
+        const match = b.batch_no.match(/^(?:PUR|P)-(\d+)$/i);
         if (match) {
           const n = parseInt(match[1], 10);
           if (!isNaN(n) && n > maxNum && n < 100000) {
@@ -248,7 +528,7 @@ async function getNextPurchaseBatchNo(offset = 0) {
     // Also consider any batch numbers already assigned in the current purchaseItems table
     for (const it of purchaseItems) {
       if (it.batch_no && typeof it.batch_no === 'string') {
-        const match = it.batch_no.match(/^(?:PUR|P)-(d+)$/i);
+        const match = it.batch_no.match(/^(?:PUR|P)-(\d+)$/i);
         if (match) {
           const n = parseInt(match[1], 10);
           if (!isNaN(n) && n > maxNum && n < 100000) {
@@ -277,20 +557,16 @@ function renderPurchaseItems() {
   
   tbody.innerHTML = purchaseItems.map((it, idx) => `
     <tr>
-      <td style="min-width:220px;">
+      <td style="min-width:240px;">
         <span class="mobile-label">Item Name</span>
         <input type="text" 
                class="form-input item-search-input" 
-               value="${it.item_name || ''}" 
+               value="${(typeof UTILS !== 'undefined' && UTILS.cleanItemName) ? UTILS.cleanItemName(it.item_name || '') : (it.item_name || '')}" 
                placeholder="Search catalog/inventory or type name..." 
                autocomplete="off" 
                onfocus="showItemSuggestions(${idx}, this)" 
                oninput="onItemSearchInput(${idx}, this)" 
                onblur="hideItemSuggestionsLater(${idx})">
-      </td>
-      <td>
-        <span class="mobile-label">Batch #</span>
-        <input type="text" class="form-input" value="${it.batch_no || ''}" placeholder="Batch #" onchange="updateItem(${idx}, 'batch_no', this.value)">
       </td>
       <td>
         <span class="mobile-label">Expiry Date</span>
@@ -410,8 +686,11 @@ function updateItem(idx, key, val) {
 
   if (key === 'item_name' || key === 'item_key') {
     const nameTrimmed = (val || '').trim();
-    it.item_name = nameTrimmed;
-    const match = purchasableItems.find(m => m.name.toLowerCase() === nameTrimmed.toLowerCase());
+    it.item_name = (typeof UTILS !== 'undefined' && UTILS.cleanItemName) ? UTILS.cleanItemName(nameTrimmed) : nameTrimmed;
+    const match = purchasableItems.find(m => 
+      m.name.toLowerCase() === nameTrimmed.toLowerCase() ||
+      (m.rawName && m.rawName.toLowerCase() === nameTrimmed.toLowerCase())
+    );
     if (match) {
       it.item_id = match.id;
       it.item_type = match.type;
@@ -461,7 +740,8 @@ async function savePurchaseDirect(payload, items) {
       paid_amount: payload.p_paid_amount || 0,
       notes: payload.p_notes || ''
     };
-    const { error: updErr } = await window.dbClient.from('purchases').update(updateData).eq('id', purchaseId);
+    const stampedUpdate = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(updateData) : updateData;
+    const { error: updErr } = await window.dbClient.from('purchases').update(stampedUpdate).eq('id', purchaseId);
     if (updErr) throw updErr;
 
     // Fetch old batch item_ids to sync them later
@@ -498,7 +778,8 @@ async function savePurchaseDirect(payload, items) {
       paid_amount: payload.p_paid_amount || 0,
       notes: payload.p_notes || ''
     };
-    const { data: insData, error: insErr } = await window.dbClient.from('purchases').insert([insertData]).select();
+    const stampedInsert = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(insertData) : insertData;
+    const { data: insData, error: insErr } = await window.dbClient.from('purchases').insert([stampedInsert]).select();
     if (insErr) throw insErr;
     purchaseId = insData[0].id;
   }
@@ -539,28 +820,50 @@ async function savePurchaseDirect(payload, items) {
       expiry_date: it.expiry_date || null,
       total: parseFloat(it.total) || 0
     }));
-    const { error: itemsErr } = await window.dbClient.from('purchase_items').insert(pItems);
+    const stampedPItems = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(pItems) : pItems;
+    const { error: itemsErr } = await window.dbClient.from('purchase_items').insert(stampedPItems);
     if (itemsErr) throw itemsErr;
 
-    // If Delivered, create stock batches for inventory tracking
+    // If Delivered, create stock batches and log inward movements for inventory tracking
     if (payload.p_status === 'Delivered') {
-      const stockBatches = resolvedItems.filter(it => it.item_id).map(it => ({
-        item_id: parseInt(it.item_id, 10),
-        item_name: it.item_name || '',
-        item_type: it.item_type || 'Inventory',
-        batch_no: it.batch_no,
-        purchase_id: purchaseId,
-        supplier_id: payload.p_supplier_id ? parseInt(payload.p_supplier_id, 10) : null,
-        purchase_date: payload.p_date,
-        purchase_price: parseFloat(it.unit_price) || 0,
-        initial_qty: parseFloat(it.base_quantity || it.quantity) || 0,
-        current_qty: parseFloat(it.base_quantity || it.quantity) || 0,
+      const itemsForReceipt = resolvedItems.filter(it => it.item_id).map(it => ({
+        itemId: parseInt(it.item_id, 10),
+        itemName: it.item_name || '',
+        quantity: parseFloat(it.base_quantity || it.quantity) || 0,
+        unitPrice: parseFloat(it.unit_price) || 0,
         unit: it.unit || 'Nos',
-        expiry_date: it.expiry_date || null
+        batchNo: it.batch_no,
+        expiryDate: it.expiry_date || null
       }));
 
-      if (stockBatches.length > 0) {
-        await window.dbClient.from('stock_batches').insert(stockBatches);
+      if (window.INVENTORY_SERVICE && window.INVENTORY_SERVICE.receivePurchaseReceipt) {
+        await window.INVENTORY_SERVICE.receivePurchaseReceipt({
+          purchaseId: purchaseId,
+          purchaseNo: purchaseNo,
+          supplierId: payload.p_supplier_id ? parseInt(payload.p_supplier_id, 10) : null,
+          purchaseDate: payload.p_date,
+          items: itemsForReceipt
+        });
+      } else {
+        const stockBatches = resolvedItems.filter(it => it.item_id).map(it => ({
+          item_id: parseInt(it.item_id, 10),
+          item_name: it.item_name || '',
+          item_type: 'Inventory',
+          batch_no: it.batch_no,
+          purchase_id: purchaseId,
+          supplier_id: payload.p_supplier_id ? parseInt(payload.p_supplier_id, 10) : null,
+          purchase_date: payload.p_date,
+          purchase_price: parseFloat(it.unit_price) || 0,
+          initial_qty: parseFloat(it.base_quantity || it.quantity) || 0,
+          current_qty: parseFloat(it.base_quantity || it.quantity) || 0,
+          unit: it.unit || 'Nos',
+          expiry_date: it.expiry_date || null
+        }));
+
+        if (stockBatches.length > 0) {
+          const stampedBatches = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(stockBatches) : stockBatches;
+          await window.dbClient.from('stock_batches').insert(stampedBatches);
+        }
       }
     }
 
@@ -582,6 +885,9 @@ async function deletePurchaseDirect(id) {
 
   await window.dbClient.from('stock_batches').delete().eq('purchase_id', id);
   await window.dbClient.from('purchase_items').delete().eq('purchase_id', id);
+  try {
+    await window.dbClient.from('stock_movements').delete().eq('txn_id', id);
+  } catch (_) {}
   const { error } = await window.dbClient.from('purchases').delete().eq('id', id);
   if (error) throw error;
 
@@ -685,6 +991,15 @@ async function deletePurchase(id) {
     }
   });
 }
+
+if (window.TENANT_CONTEXT && window.TENANT_CONTEXT.subscribe) {
+  window.TENANT_CONTEXT.subscribe(() => {
+    loadPurchases();
+  });
+}
+window.addEventListener('companyChanged', () => {
+  loadPurchases();
+});
 
 loadPurchases();
 

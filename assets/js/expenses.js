@@ -20,9 +20,10 @@ async function loadExpenses() {
     await DB.initDB();
     
     // Fetch master options and expenses in parallel for fast rendering
+    const expQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('expenses').select('*').order('id', { ascending: false })) : window.dbClient.from('expenses').select('*').order('id', { ascending: false });
     const [optsRes, expRes] = await Promise.all([
       window.dbClient.from('master_options').select('*').eq('category', 'expense_category'),
-      window.dbClient.from('expenses').select('*').order('id', { ascending: false })
+      expQuery
     ]);
 
     try {
@@ -230,9 +231,10 @@ async function saveExpense() {
       if (error) throw error;
       APP.showToast('Expense updated!', 'success');
     } else {
+      const stampedPayload = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(payload) : payload;
       const { error } = await window.dbClient
         .from('expenses')
-        .insert([payload]);
+        .insert([stampedPayload]);
       if (error) throw error;
       APP.showToast('Expense added!', 'success');
     }

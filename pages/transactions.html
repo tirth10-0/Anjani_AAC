@@ -22,39 +22,12 @@
   </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Anjani Crop Care ERP - Cash & Bank Ledger</title>
+  <title>Anjani Agri Care ERP - Cash & Bank Ledger</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="manifest" href="../manifest.json">
-  <meta name="theme-color" content="#0C3925">
   <style>
-    .tabs-wrap {
-      display: flex;
-      gap: 8px;
-      border-bottom: 2px solid var(--border);
-      padding-bottom: 8px;
-      margin-bottom: 20px;
-    }
-    .btn-tab {
-      background: none;
-      border: none;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text-muted);
-      padding: 8px 16px;
-      cursor: pointer;
-      border-radius: 6px;
-      transition: all 0.2s ease;
-    }
-    .btn-tab.active {
-      color: var(--accent);
-      background: rgba(16, 185, 129, 0.12);
-    }
-    .btn-tab:hover:not(.active) {
-      background: rgba(255,255,255,0.03);
-    }
     .accounts-header-wrap {
       display: flex;
       justify-content: space-between;
@@ -127,17 +100,27 @@
       justify-content: flex-start !important;
     }
   </style>
-  <link rel="stylesheet" href="../assets/css/style.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/forms.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/tables.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/responsive.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/components/search-select.css?v=1791542792536">
-    <link rel="icon" type="image/png" href="../assets/images/logo.png">
-  <link rel="apple-touch-icon" href="../assets/images/logo.png">
+  <link rel="stylesheet" href="../assets/css/style.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/tabs.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/forms.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/tables.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/responsive.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/components/search-select.css?v=1792916877412">
+  <meta name="theme-color" content="#0C3925">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Anjani Agri Care">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="../manifest.json">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../assets/icons/apple-touch-icon.png">
 </head>
 <body>
 <div class="app-layout" id="app-layout">
-  <script src="../assets/js/shared-layout.js?v=1791542792536"></script>
+  <script src="../assets/js/tenant-context.js?v=1792916877412"></script>
+  <script src="../assets/js/rbac-context.js?v=1792916877412"></script>
+  <script src="../assets/js/shared-layout.js?v=1792916877412"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>LAYOUT.injectLayout('Transactions','Cash & Bank Ledger'))</script>
   <main class="main-content" id="main-content">
     <div class="page-body">
@@ -146,15 +129,16 @@
           <h2>Cash & Bank Ledger</h2>
           <p>Payment receipts and disbursements ledger across bank accounts</p>
         </div>
-        <div class="page-header-right">
+        <div class="page-header-right" id="transactions-header-actions">
           <button class="btn btn-primary" onclick="openAdd()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Record Payment</button>
         </div>
       </div>
       
       <!-- Tabs header -->
-      <div class="tabs-wrap">
-        <button class="btn-tab active" id="tab-ledger" onclick="switchTab('ledger')">Transactions Ledger</button>
-        <button class="btn-tab" id="tab-accounts" onclick="switchTab('accounts')">Bank Accounts</button>
+      <div class="tabs transactions-tabs" id="transactions-tabs">
+        <button class="tab-btn btn-tab active" id="tab-ledger" onclick="switchTab('ledger')">Transactions Ledger</button>
+        <button class="tab-btn btn-tab" id="tab-accounts" onclick="switchTab('accounts')">Bank Accounts</button>
+        <button class="tab-btn btn-tab" id="tab-general-ledger" onclick="switchTab('general-ledger')">General Ledger (Double-Entry)</button>
       </div>
 
       <div id="section-ledger">
@@ -187,7 +171,7 @@
 
         <div class="table-wrap data-table-wrap-mobile">
           <div class="table-toolbar">
-            <div class="table-toolbar-left" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <div class="table-toolbar-left" id="txn-toolbar-left">
               <div class="table-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="search-input" placeholder="Search transactions..."></div>
               <div class="table-filter"><select id="type-filter" class="form-select"><option value="">All Types</option><option>Receipt</option><option>Payment</option></select></div>
               <div class="table-filter"><select id="account-filter" class="form-select"><option value="">All Accounts</option></select></div>
@@ -199,6 +183,73 @@
             <tbody><tr><td colspan="9"><div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div></td></tr></tbody>
           </table>
           <div class="pagination"></div>
+        </div>
+      </div>
+
+      <!-- General Ledger (Double-Entry) Section -->
+      <div id="section-general-ledger" style="display: none;">
+        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 20px;">
+          <div class="stat-card">
+            <div class="stat-label">Total Debits</div>
+            <div class="stat-value text-primary" id="gl-total-debits">₹0.00</div>
+            <div class="stat-meta">Authoritative asset & expense debits</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Credits</div>
+            <div class="stat-value text-success" id="gl-total-credits">₹0.00</div>
+            <div class="stat-meta">Authoritative liability & revenue credits</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Trial Balance Status</div>
+            <div class="stat-value" id="gl-balance-status" style="font-size: 18px; font-weight: 700; color: #10B981;">Balanced (0.00 Diff)</div>
+            <div class="stat-meta" id="gl-diff-text">Debits equal Credits</div>
+          </div>
+        </div>
+
+        <div class="table-wrap data-table-wrap-mobile">
+          <div class="table-toolbar">
+            <div class="table-toolbar-left" id="gl-toolbar-left">
+              <div class="table-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input id="gl-search-input" placeholder="Search general ledger..." oninput="applyGlFilters()">
+              </div>
+              <div class="table-filter">
+                <select id="gl-type-filter" class="form-select" onchange="applyGlFilters()">
+                  <option value="">All Journal Types</option>
+                  <option value="purchase">Purchase Invoices</option>
+                  <option value="supplier_payment">Supplier Payments</option>
+                  <option value="order_sale">Sales Invoices</option>
+                  <option value="customer_receipt">Customer Receipts</option>
+                  <option value="expense">Operating Expenses</option>
+                  <option value="mfg_output">Manufacturing Output</option>
+                  <option value="packaging_cost">Packaging Costs</option>
+                  <option value="dispatch_cogs">Dispatch COGS</option>
+                  <option value="reversal">Traceable Reversals</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-toolbar-right">
+              <span class="text-sm text-muted" id="gl-total-info">Loading ledger entries...</span>
+            </div>
+          </div>
+          <table class="data-table" id="gl-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Entry No</th>
+                <th>Type & Ref</th>
+                <th>Debit Account (Dr)</th>
+                <th>Credit Account (Cr)</th>
+                <th>Party</th>
+                <th class="cell-amount">Amount (₹)</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="gl-tbody">
+              <tr><td colspan="9"><div class="empty-state">Loading double-entry journal entries...</div></td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -290,6 +341,20 @@
                 <option value="">Select Account...</option>
               </select>
             </div>
+            <div class="form-group">
+              <label class="form-label">Link Document (Optional)</label>
+              <select class="form-select" name="link_type" id="txn-link-type" onchange="onTxnLinkTypeChange()">
+                <option value="">None (General Ledger)</option>
+                <option value="purchase">Purchase Invoice (Supplier Bill)</option>
+                <option value="order">Sales Order / Customer Invoice</option>
+              </select>
+            </div>
+            <div class="form-group" id="txn-linked-doc-wrap" style="display:none;">
+              <label class="form-label" id="txn-linked-doc-label">Select Document</label>
+              <select class="form-select" name="linked_doc_id" id="txn-linked-doc-select" onchange="onLinkedDocSelectChange()">
+                <option value="">Select Document...</option>
+              </select>
+            </div>
           </div>
         </section>
 
@@ -329,11 +394,40 @@
   </div>
 </div>
 
-<script src="../assets/js/database.js?v=1791542792536"></script>
-<script src="../assets/js/utils.js?v=1791542792536"></script>
-<script src="../assets/js/components/search-select.js?v=1791542792536"></script>
-<script src="../assets/js/app.js?v=1791542792536"></script>
-<script src="../assets/js/transactions.js?v=1791542792536"></script>
+<div class="modal-overlay" id="reversal-modal">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <span class="modal-title">Traceable Transaction Reversal</span>
+      <button class="modal-close" onclick="APP.closeModal('reversal-modal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div style="background:rgba(239, 68, 68, 0.08); border-left:4px solid #EF4444; padding:12px; border-radius:4px; margin-bottom:14px; font-size:12px; color:var(--text-primary);">
+        <strong>Important:</strong> Accounting entries are never hard-deleted. A compensating reversal entry will be posted swapping debit and credit accounts, permanently linked to the original entry for audit compliance.
+      </div>
+      <input type="hidden" id="reversal-entry-id">
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">Reversal Entry Target</label>
+        <input class="form-input" id="reversal-entry-target" readonly style="background:var(--bg);">
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">Reason for Reversal <span class="required">*</span></label>
+        <textarea class="form-textarea" id="reversal-reason" rows="3" placeholder="Explain the error or adjustment rationale (e.g. Returned goods, invoice cancellation, duplicate payment)..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="APP.closeModal('reversal-modal')">Cancel</button>
+      <button class="btn btn-danger" onclick="executeTraceableReversal()">Post Compensating Reversal</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/database.js?v=1792916877412"></script>
+<script src="../assets/js/utils.js?v=1792916877412"></script>
+<script src="../assets/js/components/search-select.js?v=1792916877412"></script>
+<script src="../assets/js/app.js?v=1792916877412"></script>
+<script src="../assets/js/transactions.js?v=1792916877412"></script>
 </body>
 </html>
 

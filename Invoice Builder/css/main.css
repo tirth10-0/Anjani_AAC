@@ -1,25 +1,25 @@
 :root, [data-theme="dark"], [data-theme="light"] {
-  --bg-main: #f8fafc;
+  --bg-main: #F0F2F5;
   --bg-card: #ffffff;
   --bg-banner: #ffffff;
-  --bg-banner-hover: rgba(12, 57, 37, 0.08);
+  --bg-banner-hover: rgba(8, 40, 26, 0.08);
   --border: #e2e8f0;
   --border-light: #f1f5f9;
-  --text-main: #020618;
-  --text-sub: #020618;
-  --text-muted: #020618;
-  --text-faint: rgba(2, 6, 24, 0.45);
-  --text-dim: #020618;
-  --primary: #0C3925;
-  --primary-hover: #08281a;
-  --accent: #0C3925;
-  --accent-light: #e6f5ef;
+  --text-main: #1A2332;
+  --text-sub: #1A2332;
+  --text-muted: #64748B;
+  --text-faint: rgba(26, 35, 50, 0.45);
+  --text-dim: #64748B;
+  --primary: #08281A;
+  --primary-hover: #0d3d28;
+  --accent: #08281A;
+  --accent-light: #E8F5E9;
   --danger: #dc2626;
   --danger-text: #dc2626;
   --paper-bg: #ffffff;
-  --paper-text: #020618;
-  --shadow-sm: 0 1px 3px rgba(2, 6, 24, 0.06);
-  --shadow-lg: 0 10px 24px rgba(2, 6, 24, 0.1);
+  --paper-text: #1A2332;
+  --shadow-sm: 0 1px 3px rgba(26, 35, 50, 0.06);
+  --shadow-lg: 0 10px 24px rgba(26, 35, 50, 0.1);
 }
 
 * {
@@ -43,12 +43,7 @@
   direction: ltr;
   -webkit-font-feature-settings: 'liga';
   -webkit-font-smoothing: antialiased;
-  
-  /* Fallback: hide raw text fallback until font loads */
-  color: transparent;
-  width: 1em;
-  height: 1em;
-  overflow: hidden;
+  color: inherit;
   vertical-align: middle;
 }
 
@@ -248,7 +243,7 @@ body, input, select, textarea, button, p, span, div, h1, h2, h3, h4, h5, h6, td,
 }
 
 /* Whitelist primary button text, save/pdf buttons, and dark header badges */
-.btn-primary, .btn-primary *, #save-cloud-btn, #save-cloud-btn *, #pdf-btn, #pdf-btn *, .btn-save, .btn-save *, .totals-grand, .totals-grand *, .totals-grand span, .invoice-badge, .badge-primary, .profile-circle, .items-table thead th {
+.btn-primary, .btn-primary *, #save-cloud-btn, #save-cloud-btn *, #whatsapp-btn, #whatsapp-btn *, .btn-whatsapp, .btn-whatsapp *, #pdf-btn, #pdf-btn *, .btn-save, .btn-save *, .totals-grand, .totals-grand *, .totals-grand span, .invoice-badge, .badge-primary, .profile-circle, .items-table thead th, .btn-create-entry, .btn-create-entry *, .btn-create-entry span, .btn-create-entry .material-symbols-outlined, #save-btn, #save-btn * {
   color: #ffffff !important;
 }
 
@@ -571,7 +566,7 @@ body, input, select, textarea, button, p, span, div, h1, h2, h3, h4, h5, h6, td,
   font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #0C3925 !important;
+  color: #08281A !important;
 }
 
 .brand-sub {
@@ -611,7 +606,8 @@ body, input, select, textarea, button, p, span, div, h1, h2, h3, h4, h5, h6, td,
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 15px;
+  font-size: 11px;
+  letter-spacing: -0.3px;
   cursor: pointer;
   box-shadow: 0 2px 10px rgba(12, 57, 37, 0.3);
   transition: all 0.2s;
@@ -748,7 +744,7 @@ body, input, select, textarea, button, p, span, div, h1, h2, h3, h4, h5, h6, td,
   width: 100%;
   padding: 8px 12px;
   background: var(--bg-main);
-  border: 1px solid #0C3925;
+  border: 1px solid #08281A;
   border-radius: 8px;
   color: #020618;
   font-size: 12px;
@@ -951,7 +947,7 @@ input[type="number"] {
   gap: 12px;
   margin-bottom: 28px;
   padding-bottom: 24px;
-  border-bottom: 3px solid #0C3925;
+  border-bottom: 3px solid #08281A;
 }
 
 .paper-logo-section {
@@ -1001,7 +997,7 @@ input[type="number"] {
 .paper-company-name {
   font-size: 22px;
   font-weight: 800;
-  color: #0C3925 !important;
+  color: #08281A !important;
   letter-spacing: -0.5px;
 }
 
@@ -1014,7 +1010,7 @@ input[type="number"] {
 
 .invoice-badge {
   display: inline-block;
-  background: #0C3925;
+  background: #08281A;
   color: #fff;
   font-size: 13px;
   font-weight: 700;
@@ -1091,7 +1087,7 @@ body.gst-mode .gst-doc-strip {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1.2px;
-  color: #0C3925;
+  color: #08281A;
   margin-bottom: 6px;
 }
 
@@ -1127,7 +1123,7 @@ body.gst-mode .gst-doc-strip {
 }
 
 .items-table thead tr {
-  background: #0C3925;
+  background: #08281A;
   color: #fff;
 }
 
@@ -1286,7 +1282,7 @@ td .row-total {
   align-items: center;
   gap: 6px;
   background: none;
-  border: 1px dashed #0C3925;
+  border: 1px dashed #08281A;
   color: #020618;
   font-size: 12px;
   font-weight: 600;
@@ -1354,7 +1350,7 @@ td .row-total {
   display: flex;
   justify-content: space-between;
   padding: 12px 16px;
-  background: #0C3925 !important;
+  background: #08281A !important;
   color: #ffffff !important;
   font-size: 15px;
   font-weight: 700;
@@ -1622,12 +1618,12 @@ button.mob-tab .material-symbols-outlined {
 .mob-tab:hover,
 a.mob-tab:hover,
 button.mob-tab:hover {
-  color: #0C3925 !important;
+  color: #08281A !important;
 }
 .mob-tab:hover .material-symbols-outlined,
 a.mob-tab:hover .material-symbols-outlined,
 button.mob-tab:hover .material-symbols-outlined {
-  color: #0C3925 !important;
+  color: #08281A !important;
 }
 
 [data-theme="dark"] .mob-tab:hover,
@@ -1646,7 +1642,7 @@ a.mob-tab.active,
 a.mob-tab.active:link,
 a.mob-tab.active:visited,
 button.mob-tab.active {
-  background: #0C3925 !important;
+  background: #08281A !important;
   color: #ffffff !important;
   border-radius: 12px !important;
   padding: 6px 4px !important;
@@ -1681,7 +1677,7 @@ button.mob-tab.active .material-symbols-outlined {
 }
 
 .mob-tab-pdf:hover {
-  color: #0C3925 !important;
+  color: #08281A !important;
 }
 
 .mob-tab-pdf:active {
@@ -1919,7 +1915,7 @@ button.mob-tab.active .material-symbols-outlined {
     max-width: 220px;
     font-size: 17px !important;
     font-weight: 800 !important;
-    color: #0C3925 !important;
+    color: #08281A !important;
   }
 
   .toolbar-actions {
@@ -2229,18 +2225,18 @@ button.mob-tab.active .material-symbols-outlined {
 * { scrollbar-width: thin; scrollbar-color: var(--border) var(--bg-main); }
 
 /* ═════════════════════════════════════════════════════════════════
-   ANJANI CROP CARE UI COMPONENT SYSTEM (INVOICE BUILDER)
+   ANJANI AGRI CARE UI COMPONENT SYSTEM (INVOICE BUILDER)
    ═════════════════════════════════════════════════════════════════ */
 
 /* 1. Global Pill Search Bar */
-.anjani-pill-search-container {
+.acc-, .anjani- {
   position: relative !important;
   display: flex !important;
   align-items: center !important;
   width: 100% !important;
 }
 
-.anjani-pill-search-icon {
+.acc-, .anjani- {
   position: absolute !important;
   left: 14px !important;
   top: 50% !important;
@@ -2254,15 +2250,15 @@ button.mob-tab.active .material-symbols-outlined {
   justify-content: center !important;
 }
 
-.anjani-pill-search-icon svg,
-.anjani-pill-search-icon .material-symbols-outlined {
+.acc-, .anjani- svg,
+.acc-, .anjani- .material-symbols-outlined {
   font-size: 18px !important;
   width: 18px !important;
   height: 18px !important;
   color: #94a3b8 !important;
 }
 
-.anjani-pill-search-input {
+.acc-, .anjani- {
   width: 100% !important;
   padding-left: 40px !important;
   padding-right: 96px !important;
@@ -2277,28 +2273,28 @@ button.mob-tab.active .material-symbols-outlined {
   transition: all 0.2s ease !important;
 }
 
-.anjani-pill-search-input:hover {
+.acc-, .anjani-:hover {
   background-color: rgba(241, 245, 249, 0.8) !important;
 }
 
-.anjani-pill-search-input:focus {
+.acc-, .anjani-:focus {
   background-color: #ffffff !important;
-  border-color: #0C3925 !important;
+  border-color: #08281A !important;
   box-shadow: 0 0 0 3px rgba(12, 57, 37, 0.15) !important;
 }
 
-.anjani-pill-search-input::placeholder {
+.acc-, .anjani-::placeholder {
   color: #94a3b8 !important;
 }
 
-.anjani-pill-search-btn {
+.acc-, .anjani- {
   position: absolute !important;
   right: 6px !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
   height: 28px !important;
   padding: 0 12px !important;
-  background-color: #0C3925 !important;
+  background-color: #08281A !important;
   color: #ffffff !important;
   border-radius: 9999px !important;
   font-size: 12px !important;
@@ -2311,12 +2307,12 @@ button.mob-tab.active .material-symbols-outlined {
   transition: background-color 0.2s ease, transform 0.1s ease !important;
 }
 
-.anjani-pill-search-btn:hover {
+.acc-, .anjani-:hover {
   background-color: #08281a !important;
 }
 
 /* 2. Standard Select Dropdowns (Filters, Sorting, Forms) */
-select.anjani-select {
+select.acc-, .anjani- {
   padding: 8px 36px 8px 12px !important;
   font-size: 12px !important;
   background-color: #f8fafc !important;
@@ -2337,13 +2333,13 @@ select.anjani-select {
   text-align: left !important;
 }
 
-select.anjani-select:hover {
+select.acc-, .anjani-:hover {
   background-color: rgba(241, 245, 249, 0.7) !important;
   border-color: #cbd5e1 !important;
 }
 
-select.anjani-select:focus {
-  border-color: #0C3925 !important;
+select.acc-, .anjani-:focus {
+  border-color: #08281A !important;
   box-shadow: 0 0 0 3px rgba(12, 57, 37, 0.2) !important;
   background-color: #ffffff !important;
 }
@@ -2359,7 +2355,7 @@ select.sb-input {
   font-weight: 500 !important;
   line-height: normal !important;
   background-color: var(--bg-main) !important;
-  border: 1px solid #0C3925 !important;
+  border: 1px solid #08281A !important;
   border-radius: 8px !important;
   color: #020618 !important;
   outline: none !important;
@@ -2399,7 +2395,7 @@ select.sb-input:focus {
 }
 
 /* 3. Compound Input-Dropdown Groups (Value + Unit fields) */
-.anjani-compound-group,
+.acc-, .anjani-,
 .compound-input-group {
   display: flex !important;
   border-radius: 12px !important;
@@ -2410,13 +2406,13 @@ select.sb-input:focus {
   align-items: stretch !important;
 }
 
-.anjani-compound-group:focus-within,
+.acc-, .anjani-:focus-within,
 .compound-input-group:focus-within {
-  border-color: #0C3925 !important;
+  border-color: #08281A !important;
   box-shadow: 0 0 0 3px rgba(12, 57, 37, 0.2) !important;
 }
 
-.anjani-compound-group .compound-left-input,
+.acc-, .anjani- .compound-left-input,
 .compound-input-group .compound-left-input {
   width: 60% !important;
   flex: 3 !important;
@@ -2431,7 +2427,7 @@ select.sb-input:focus {
   box-shadow: none !important;
 }
 
-.anjani-compound-group .compound-right-select,
+.acc-, .anjani- .compound-right-select,
 .compound-input-group .compound-right-select {
   width: 40% !important;
   flex: 2 !important;
@@ -2530,7 +2526,7 @@ select.sb-input:focus {
 
 .search-box input:focus,
 .search-container input:focus {
-  border-color: #0C3925 !important;
+  border-color: #08281A !important;
   box-shadow: 0 0 0 3px rgba(12, 57, 37, 0.2) !important;
   background-color: #ffffff !important;
 }

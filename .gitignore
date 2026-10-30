@@ -19,3 +19,23 @@ pnpm-debug.log*
 # System files
 .DS_Store
 Thumbs.db
+
+# Production data backups (contain real data - never commit)
+backups/
+
+# Generated artifacts
+scratch/generated/
+*.pdf
+
+# Sub-app node_modules
+Invoice Builder/node_modules/
+apps/Formulations/node_modules/
+apps/Invoice Builder/node_modules/
+
+# Test screenshots and scratch scripts
+test_*.png
+test_label_parser.js
+latest_prompt.txt
+tests/scratch/
+*.xlsx
+

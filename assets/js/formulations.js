@@ -644,10 +644,14 @@ async function loadFormulations() {
   try {
     if (window.DB && window.DB.initDB) await window.DB.initDB();
 
+    const prodQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('products').select('*')) : window.dbClient.from('products').select('*');
+    const invQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('inventory_items').select('*')) : window.dbClient.from('inventory_items').select('*');
+    const fQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('formulations').select('*, formulation_ingredients(*)')) : window.dbClient.from('formulations').select('*, formulation_ingredients(*)');
+
     const [productsRes, inventoryRes, formulationsRes] = await Promise.all([
-      window.dbClient.from('products').select('*'),
-      window.dbClient.from('inventory_items').select('*'),
-      window.dbClient.from('formulations').select('*, formulation_ingredients(*)')
+      prodQuery,
+      invQuery,
+      fQuery
     ]);
 
     if (productsRes.error) throw productsRes.error;
@@ -774,9 +778,10 @@ async function saveFormulation() {
         .eq('id', editingFormId);
       if (error) throw error;
     } else {
+      const stampedBody = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(bodyData) : bodyData;
       const { data, error } = await window.dbClient
         .from('formulations')
-        .insert([bodyData])
+        .insert([stampedBody])
         .select()
         .single();
       if (error) throw error;
@@ -792,9 +797,10 @@ async function saveFormulation() {
         formulation_id: formulationId,
         ...ing
       }));
+      const stampedIngs = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(ingredientsData) : ingredientsData;
       const { error: ingError } = await window.dbClient
         .from('formulation_ingredients')
-        .insert(ingredientsData);
+        .insert(stampedIngs);
       if (ingError) throw ingError;
     }
 
@@ -870,26 +876,28 @@ function calculateProductionNeeds() {
 
     return `
       <tr>
-        <td><strong>${escapeHtml(ingredient.product_name || 'Unnamed Ingredient')}</strong></td>
-        <td>${formatQty(requiredQty)} ${escapeHtml(unit)}</td>
-        <td>${pct}</td>
-        <td>${UTILS.fmtCurrency(cost)}</td>
+        <td data-label="Ingredient"><strong>${escapeHtml(ingredient.product_name || 'Unnamed Ingredient')}</strong></td>
+        <td data-label="Req. Qty">${formatQty(requiredQty)} ${escapeHtml(unit)}</td>
+        <td data-label="Percentage">${pct}</td>
+        <td data-label="Est. Cost">${UTILS.fmtCurrency(cost)}</td>
       </tr>
     `;
   }).join('');
 
   container.innerHTML = `
-    <table class="line-items-table" style="width:100%; margin-top:10px;">
-      <thead>
-        <tr>
-          <th>Ingredient</th>
-          <th>Req. Qty</th>
-          <th>Percentage</th>
-          <th>Est. Cost</th>
-        </tr>
-      </thead>
-      <tbody>${rowsHtml}</tbody>
-    </table>
+    <div class="table-scroll-wrap" style="width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:8px;margin-top:10px;">
+      <table class="line-items-table" style="width:100%;min-width:440px;margin:0;">
+        <thead>
+          <tr>
+            <th style="white-space:nowrap;">Ingredient</th>
+            <th style="white-space:nowrap;">Req. Qty</th>
+            <th style="white-space:nowrap;">Percentage</th>
+            <th style="white-space:nowrap;">Est. Cost</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
   `;
 
   const confirmBtn = document.querySelector('#production-modal .modal-footer .btn-primary');
@@ -963,7 +971,8 @@ async function confirmProduction() {
         formulation_id: activeProductionFormulation.id,
         ...ing
       }));
-      const { error: ingError } = await window.dbClient.from('formulation_ingredients').insert(ingData);
+      const stampedIngData = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(ingData) : ingData;
+      const { error: ingError } = await window.dbClient.from('formulation_ingredients').insert(stampedIngData);
       if (ingError) throw ingError;
     }
 

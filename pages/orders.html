@@ -21,7 +21,7 @@
     })();
   </script>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Anjani Crop Care ERP - Orders</title>
+  <title>Anjani Agri Care ERP - Orders</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <style>
@@ -70,50 +70,185 @@
     input:checked + .slider:before {
       transform: translateX(20px);
     }
+
+    #order-items-table {
+      table-layout: auto !important;
+      width: 100%;
+    }
+    #order-items-table th, #order-items-table td {
+      vertical-align: middle;
+    }
+    #order-items-table select.form-select {
+      width: 100%;
+      min-width: 175px;
+    }
+
+    /* ── Clean Single-Tab Print Styles ── */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 8mm 10mm;
+      }
+      html, body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        height: auto !important;
+        overflow: visible !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      /* Hide all ERP app chrome, navigation, headers, footers, buttons */
+      .app-layout,
+      .sidebar,
+      .topbar,
+      .app-header,
+      .page-header,
+      .page-body,
+      .tabs,
+      .table-toolbar,
+      .table-wrap,
+      .cat-pill-filters,
+      .toast-container,
+      #toast,
+      button,
+      .btn,
+      .modal-header,
+      .modal-footer {
+        display: none !important;
+      }
+
+      /* Modal and paper isolation */
+      .modal-overlay {
+        position: static !important;
+        background: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        display: none !important;
+        overflow: visible !important;
+      }
+      .modal-overlay.open {
+        display: block !important;
+        position: static !important;
+      }
+      .modal {
+        position: static !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        transform: none !important;
+      }
+      .modal-body {
+        padding: 0 !important;
+        background: transparent !important;
+        overflow: visible !important;
+      }
+      #view-invoice-paper,
+      #dispatch-slip-paper {
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      #view-invoice-paper th,
+      #dispatch-slip-paper th {
+        color: #ffffff !important;
+        background: #0C3925 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      #view-invoice-paper *,
+      #dispatch-slip-paper * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="manifest" href="../manifest.json">
+  <link rel="stylesheet" href="../assets/css/style.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/forms.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/tables.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/responsive.css?v=1792916877412">
+  <link rel="stylesheet" href="../assets/css/components/search-select.css?v=1792916877412">
   <meta name="theme-color" content="#0C3925">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Anjani Agri Care">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="../manifest.json">
-  <meta name="theme-color" content="#0C3925">
-  <link rel="stylesheet" href="../assets/css/style.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/forms.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/tables.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/responsive.css?v=1791542792536">
-  <link rel="stylesheet" href="../assets/css/components/search-select.css?v=1791542792536">
-    <link rel="icon" type="image/png" href="../assets/images/logo.png">
-  <link rel="apple-touch-icon" href="../assets/images/logo.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../assets/icons/apple-touch-icon.png">
 </head>
 <body>
 <div class="app-layout" id="app-layout">
-  <script src="../assets/js/shared-layout.js?v=1791542792536"></script>
+  <script src="../assets/js/tenant-context.js?v=1792916877412"></script>
+  <script src="../assets/js/rbac-context.js?v=1792916877412"></script>
+  <script src="../assets/js/shared-layout.js?v=1792916877412"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>LAYOUT.injectLayout('Orders','Orders'))</script>
   <main class="main-content" id="main-content">
     <div class="page-body">
       <div class="page-header">
         <div class="page-header-left"><h2>Orders</h2><p>Create and manage customer orders</p></div>
         <div class="page-header-right">
+          <button class="btn btn-secondary" onclick="openPrepareDispatch()" style="margin-right:8px; display:inline-flex; align-items:center; gap:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M5 18H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.19M15 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.19"/><path d="M12 12v6"/><path d="m9 15 3 3 3-3"/></svg>Prepare Dispatch</button>
           <button class="btn btn-primary" onclick="openAdd()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Order</button>
         </div>
       </div>
-      <div class="tabs">
+      <div class="tabs orders-tabs">
         <button class="tab-btn active" data-tab="Orders">Orders Summary</button>
-        <button class="tab-btn" data-tab="OrderItems">Order Items Detail</button>
+        <button class="tab-btn" data-tab="Dispatches">Dispatches & Gate Passes</button>
       </div>
       <div class="table-wrap data-table-wrap-mobile" id="orders-table-wrap">
-        <div class="table-toolbar">
-          <div class="table-toolbar-left">
-            <div class="table-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="search-input" placeholder="Search orders…"></div>
-            <div class="table-filters cat-pill-filters" id="status-pill-filters">
+        <div class="table-toolbar erp-filter-toolbar">
+          <div class="table-toolbar-left erp-filter-left">
+            <div class="table-search erp-filter-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="search-input" placeholder="Search orders…"></div>
+            <div class="table-filters cat-pill-filters erp-status-pills" id="status-pill-filters">
               <button type="button" class="cat-pill active" data-status="">All</button>
               <button type="button" class="cat-pill" data-status="Pending">Pending</button>
               <button type="button" class="cat-pill" data-status="Completed">Completed</button>
             </div>
+            <div class="erp-client-filter-wrap">
+              <select id="order-client-filter" class="form-select erp-filter-select" onchange="applyFiltersAndRender()">
+                <option value="">All Clients</option>
+              </select>
+            </div>
           </div>
-          <div class="table-toolbar-right"><span class="text-sm text-muted" id="total-info">Loading...</span></div>
+          <div class="table-toolbar-right erp-filter-right"><span class="text-sm text-muted erp-filter-count" id="total-info">Loading...</span></div>
         </div>
-        <table class="data-table" id="orders-table">
-          <thead><tr><th>Order No</th><th>Client</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
+
+        <!-- Responsive Card Grid Container for Orders Summary -->
+        <div class="orders-summary-cards-grid" id="orders-cards-container">
+          <div class="empty-state" style="grid-column: 1 / -1; width: 100%; text-align: center; padding: 48px 20px;">
+            <div class="spinner" style="margin:0 auto"></div>
+          </div>
+        </div>
+
+        <table class="data-table" id="orders-table" style="display:none;">
+          <thead>
+            <tr>
+              <th style="width:11%;">Order No</th>
+              <th style="width:19%;">Client</th>
+              <th style="width:10%;">Date</th>
+              <th class="cell-amount text-right" style="width:11%; text-align:right;">Total</th>
+              <th class="cell-amount text-right" style="width:11%; text-align:right;">Paid</th>
+              <th class="cell-amount text-right" style="width:11%; text-align:right;">Balance</th>
+              <th class="text-center" style="width:11%; text-align:center;">Dispatch Status</th>
+              <th class="text-center" style="width:9%; text-align:center;">Order Status</th>
+              <th class="text-center" style="width:7%; text-align:center;">Actions</th>
+            </tr>
+          </thead>
           <tbody><tr><td colspan="9"><div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div></td></tr></tbody>
         </table>
         <div class="pagination"></div>
@@ -131,9 +266,75 @@
           </div>
           <div class="table-toolbar-right"><span class="text-sm text-muted" id="items-total-info">Loading...</span></div>
         </div>
-        <table class="data-table" id="order-items-detail-table">
-          <thead><tr><th>Order No</th><th>Client</th><th>Date</th><th>Product</th><th>Pack Size / Unit</th><th>Qty</th><th>Unit Price (₹)</th><th>Total (₹)</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody><tr><td colspan="10"><div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div></td></tr></tbody>
+        <!-- Responsive Card Grid Container for Order Items Detail -->
+        <div class="order-items-cards-grid" id="order-items-cards-container">
+          <div class="empty-state" style="grid-column: 1 / -1; width: 100%; text-align: center; padding: 48px 20px;">
+            <div class="spinner" style="margin:0 auto"></div>
+          </div>
+        </div>
+
+        <table class="data-table" id="order-items-detail-table" style="display:none;">
+          <thead>
+            <tr>
+              <th style="width:8%;">Order No</th>
+              <th style="width:12%;">Client</th>
+              <th style="width:8%;">Date</th>
+              <th style="width:16%;">Product</th>
+              <th style="width:10%;">Pack Size / Unit</th>
+              <th class="text-right" style="width:10%; text-align:right;">Ordered</th>
+              <th class="text-center" style="width:7%; text-align:center;">Dispatched</th>
+              <th class="text-center" style="width:7%; text-align:center;">Remaining</th>
+              <th class="cell-amount text-right" style="width:8%; text-align:right;">Unit Price (₹)</th>
+              <th class="cell-amount text-right" style="width:9%; text-align:right;">Total (₹)</th>
+              <th class="text-center" style="width:8%; text-align:center;">Status</th>
+              <th class="text-center" style="width:7%; text-align:center;">Actions</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="12"><div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div></td></tr></tbody>
+        </table>
+        <div class="pagination" style="display:none;"></div>
+      </div>
+
+      <!-- Commercial Dispatches & Gate Passes Table -->
+      <div class="table-wrap data-table-wrap-mobile" id="dispatches-table-wrap" style="display:none">
+        <div class="table-toolbar erp-filter-toolbar">
+          <div class="table-toolbar-left erp-filter-left">
+            <div class="table-search erp-filter-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input id="dispatch-search-input" placeholder="Search dispatches, orders, clients, vehicle…">
+            </div>
+            <div class="table-filters cat-pill-filters erp-status-pills dispatch-pills" id="dispatch-status-pill-filters">
+              <button type="button" class="cat-pill active" data-status="">All</button>
+              <button type="button" class="cat-pill" data-status="Pending Verification">Pending Verification</button>
+              <button type="button" class="cat-pill" data-status="Verified">Verified</button>
+              <button type="button" class="cat-pill" data-status="Approved">Approved</button>
+              <button type="button" class="cat-pill" data-status="Dispatched">Dispatched</button>
+              <button type="button" class="cat-pill" data-status="Cancelled">Cancelled</button>
+            </div>
+          </div>
+          <div class="table-toolbar-right erp-filter-right">
+            <span class="text-sm text-muted erp-filter-count" id="dispatch-total-info">Loading...</span>
+          </div>
+        </div>
+        <div class="dispatches-cards-grid" id="dispatches-cards-container"></div>
+        <table class="data-table" id="dispatches-table" style="display:none;">
+          <thead>
+            <tr>
+              <th style="width:12%;">Dispatch Slip No</th>
+              <th style="width:10%;">Order Ref</th>
+              <th style="width:14%;">Client</th>
+              <th style="width:9%;">Dispatch Date</th>
+              <th style="width:12%;">Boxes</th>
+              <th class="text-center" style="width:8%; text-align:center;">Total Units</th>
+              <th style="width:13%;">Vehicle / Logistics</th>
+              <th class="text-center" style="width:10%; text-align:center;">Status</th>
+              <th class="text-center" style="width:7%; text-align:center;">Commercial Invoice</th>
+              <th class="text-center" style="width:5%; text-align:center;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="10"><div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div></td></tr>
+          </tbody>
         </table>
         <div class="pagination"></div>
       </div>
@@ -164,10 +365,17 @@
               <label class="form-label">Date</label>
               <input class="form-input" name="date" id="order-date-field" type="date">
             </div>
-            <div class="form-group form-col-full">
+            <div class="form-group">
               <label class="form-label">Client <span class="required">*</span></label>
-              <select class="form-select" name="client_id" id="client-select" data-autocomplete>
+              <select class="form-select" name="client_id" id="client-select" data-autocomplete onchange="if(typeof onOrderClientChange==='function')onOrderClientChange(this.value)">
                 <option value="">Select…</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Brand / Label Owner <span class="required">*</span></label>
+              <select class="form-select" name="label_owner" id="order-label-owner-select" onchange="if(typeof onOrderLabelOwnerChange==='function')onOrderLabelOwnerChange(this.value)">
+                <option value="AAC" selected>AAC (Anjani Agri Care - In-House)</option>
+                <option value="GAS">GAS (Greenfield Agro Solutions - Co-Marketing)</option>
               </select>
             </div>
             <div class="form-group">
@@ -244,26 +452,45 @@
             <p>Specify formulation quantities and sales price per pack size.</p>
           </div>
           <div class="line-items-wrap">
-            <table class="line-items-table" style="margin-bottom:8px">
+            <table class="line-items-table" id="order-items-table" style="margin-bottom:8px">
               <thead><tr>
-                <th style="width:25%">Product</th>
-                <th style="width:15%">Pack Size</th>
-                <th style="width:20%">Bottle</th>
-                <th style="width:10%">Qty</th>
-                <th style="width:15%">Unit Price (₹)</th>
-                <th style="width:10%">Total</th>
-                <th style="width:5%"></th>
+                <th style="width:21%; min-width:170px;">Product</th>
+                <th style="width:13%; min-width:115px;">Pack Size</th>
+                <th style="width:20%; min-width:190px;">Bottle</th>
+                <th style="width:20%; min-width:190px;">Box</th>
+                <th style="width:8%; min-width:70px;">Qty</th>
+                <th style="width:9%; min-width:80px;">Unit Price (₹)</th>
+                <th style="width:9%; min-width:85px;">Total</th>
+                <th style="width:4%; min-width:40px;"></th>
               </tr></thead>
               <tbody id="order-items-tbody"></tbody>
             </table>
           </div>
           <button type="button" class="add-line-btn" style="margin-top: 10px;" onclick="addOrderItem()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Item</button>
+          
+          <!-- Live Material & Packaging Stock Verification -->
+          <div id="order-stock-summary-box" class="order-stock-summary-box" style="display: none;">
+            <div class="stock-summary-header">
+              <div class="stock-summary-title-col">
+                <div class="stock-summary-title-row">
+                  <svg class="stock-summary-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                  </svg>
+                  <h5 class="stock-summary-title">Live Material & Packaging Stock Verification</h5>
+                </div>
+                <div id="stock-summary-stats-pills" class="stock-summary-pills"></div>
+              </div>
+              <div class="stock-summary-badge-col">
+                <span id="stock-summary-badge" class="badge badge-success stock-summary-main-badge">Stock Available</span>
+              </div>
+            </div>
+            <div id="order-stock-summary-content" class="order-stock-summary-content"></div>
+          </div>
+
           <div class="summary-row"><div class="summary-box">
             <div class="summary-line"><span class="label">Subtotal:</span><span class="value" id="order-total-display">₹0.00</span></div>
-            <div class="summary-line" id="cgst-row" style="display:none;"><span class="label" id="cgst-label">CGST (0%):</span><span class="value" id="cgst-display">₹0.00</span></div>
-            <div class="summary-line" id="sgst-row" style="display:none;"><span class="label" id="sgst-label">SGST (0%):</span><span class="value" id="sgst-display">₹0.00</span></div>
-            <div class="summary-line" id="igst-row" style="display:none;"><span class="label" id="igst-label">IGST (0%):</span><span class="value" id="igst-display">₹0.00</span></div>
-            <div class="summary-line" id="grand-total-row" style="display:none; font-weight:700;"><span class="label">Grand Total (incl. GST):</span><span class="value" id="grand-total-display">₹0.00</span></div>
           </div></div>
         </section>
       </form>
@@ -271,6 +498,235 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="APP.closeModal('order-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveOrder()">Save Order</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Modal 1: Prepare Commercial Dispatch Slip -->
+<div class="modal-overlay" id="prepare-dispatch-modal">
+  <div class="modal modal-xl">
+    <div class="modal-header">
+      <span class="modal-title">Prepare Commercial Dispatch Slip</span>
+      <button class="modal-close" onclick="APP.closeModal('prepare-dispatch-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <form id="prepare-dispatch-form" onsubmit="return false">
+        <section class="product-form-card">
+          <div class="product-form-card-head">
+            <h4>Sales Order Selection & Details</h4>
+            <p>Verify customer order details and remaining un-dispatched quantities.</p>
+          </div>
+          <div class="form-grid product-form-grid">
+            <div class="form-group form-col-full">
+              <label class="form-label">Sales Order <span class="required">*</span></label>
+              <select class="form-select" id="disp-order-select" data-autocomplete onchange="onDispatchOrderSelected(this.value)">
+                <option value="">Select sales order…</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Dispatch Slip No</label>
+              <input class="form-input" id="disp-slip-no" readonly style="background:var(--bg); font-weight:700;">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Dispatch Date</label>
+              <input class="form-input" id="disp-date" type="date">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Dispatch Source (Where stock leaves) <span class="required">*</span></label>
+              <select class="form-select" id="disp-source-warehouse">
+                <option value="1" selected>Anjani Agri Care Main Plant Warehouse (Factory Stock)</option>
+                <option value="532">GAS (WH-E-GAS)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Delivery Destination / Target</label>
+              <select class="form-select" id="disp-delivery-target" onchange="window.onDeliveryTargetChange ? window.onDeliveryTargetChange(this.value) : null">
+                <option value="CUSTOMER" selected>🚚 Direct Delivery to Customer / Dealer</option>
+                <option value="GODOWN">🏢 Transfer & Stock into Partner Godown</option>
+              </select>
+            </div>
+            <div class="form-group" id="disp-target-wh-group" style="display:none;">
+              <label class="form-label">Destination Godown / Warehouse</label>
+              <select class="form-select" id="disp-target-warehouse"></select>
+            </div>
+          </div>
+          <!-- Live Actual Order Data Display Card -->
+          <div id="disp-selected-order-card" style="margin-top:16px; display:none;"></div>
+        </section>
+
+        <!-- Order Items Allocation Section -->
+        <section class="product-form-card">
+          <div class="product-form-card-head">
+            <h4>Order Items & Dispatch Quantities</h4>
+            <p>Review items for this order and specify dispatch units (Boxes & Total Units).</p>
+          </div>
+          <div id="disp-items-container">
+            <p style="color:var(--text-muted); font-size:13px;">Please select a sales order above to view order items.</p>
+          </div>
+        </section>
+
+        <!-- Logistics & Transporter Section -->
+        <section class="product-form-card">
+          <div class="product-form-card-head">
+            <h4>Logistics, Vehicle & Gate Information</h4>
+            <p>Enter vehicle registration, transporter details, and government E-Way Bill number.</p>
+          </div>
+          <div class="form-grid product-form-grid">
+            <div class="form-group">
+              <label class="form-label">Vehicle Registration No</label>
+              <input class="form-input" id="disp-vehicle-no" placeholder="e.g. GJ 03 AB 1512" style="text-transform:uppercase; font-weight:700; letter-spacing:0.5px;" oninput="this.value = DISPATCH_UI.formatVehicleNumber(this.value)" onblur="this.value = DISPATCH_UI.formatVehicleNumber(this.value)">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Transporter / Logistics Name</label>
+              <input class="form-input" id="disp-transporter" placeholder="e.g. Shreeji Logistics">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Driver Contact Phone</label>
+              <input class="form-input" id="disp-driver-contact" placeholder="e.g. +91 98765 43210">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Government E-Way Bill No</label>
+              <input class="form-input" id="disp-eway-bill" placeholder="e.g. EWB-2026-98124">
+            </div>
+            <div class="form-group form-col-full">
+              <label class="form-label">Dispatch Instructions / Remarks</label>
+              <textarea class="form-textarea" id="disp-notes" rows="2" placeholder="Packaging handling, gate notes, client instructions…"></textarea>
+            </div>
+          </div>
+        </section>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="APP.closeModal('prepare-dispatch-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitPrepareDispatch()">Create Commercial Dispatch Slip</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 2: Godown Packing Verification -->
+<div class="modal-overlay" id="verify-dispatch-modal">
+  <div class="modal modal-md" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title">Godown Packing Completion Verification</span>
+      <button class="modal-close" onclick="APP.closeModal('verify-dispatch-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="verify-dispatch-body">
+      <!-- Injected dynamically -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="APP.closeModal('verify-dispatch-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitVerifyDispatch()">Confirm Godown Verification</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 3: Dispatch Approval -->
+<div class="modal-overlay" id="approve-dispatch-modal">
+  <div class="modal modal-md" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title">Dispatch Authorization & Manager Sign-off</span>
+      <button class="modal-close" onclick="APP.closeModal('approve-dispatch-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="approve-dispatch-body">
+      <!-- Injected dynamically -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="APP.closeModal('approve-dispatch-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitApproveDispatch()">Authorize Commercial Gate Exit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 4: Execute Gate Pass & Physical Stock Deduction -->
+<div class="modal-overlay" id="execute-dispatch-modal">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <span class="modal-title">Confirm Gate Exit & Deduct Stock</span>
+      <button class="modal-close" onclick="APP.closeModal('execute-dispatch-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="execute-dispatch-body">
+      <!-- Injected dynamically -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="APP.closeModal('execute-dispatch-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitExecuteDispatch()">Confirm Gate Exit (Deduct Stock Exactly Once)</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 5: Commercial Invoice Generation -->
+<div class="modal-overlay" id="generate-invoice-modal">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <span class="modal-title">Generate Commercial Tax Invoice</span>
+      <button class="modal-close" onclick="APP.closeModal('generate-invoice-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="generate-invoice-body">
+      <!-- Injected dynamically -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="APP.closeModal('generate-invoice-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitGenerateInvoice()">Generate Tax Invoice (Zero Double-Deduction)</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 6: Dispatch Reversal / Customer Return -->
+<div class="modal-overlay" id="reverse-dispatch-modal">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <span class="modal-title">Safe Reversal & Inventory Restoration</span>
+      <button class="modal-close" onclick="APP.closeModal('reverse-dispatch-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="reverse-dispatch-body">
+      <!-- Injected dynamically -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="APP.closeModal('reverse-dispatch-modal')">Cancel</button>
+      <button class="btn btn-danger" onclick="submitReverseDispatch()">Execute Reversal & Restore Stock</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 7: View Dispatch Slip -->
+<div class="modal-overlay" id="view-dispatch-modal">
+  <div class="modal modal-lg doc-preview-modal" style="max-width:880px;">
+    <div class="modal-header doc-modal-header">
+      <span class="modal-title" id="view-dispatch-title">Commercial Dispatch Slip & Gate Pass</span>
+      <button class="modal-close" onclick="APP.closeModal('view-dispatch-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body doc-preview-body" id="view-dispatch-content">
+      <!-- Injected dynamically -->
+    </div>
+    <div class="modal-footer doc-modal-footer" id="view-dispatch-footer">
+      <button type="button" class="btn btn-primary" onclick="downloadDispatchSlipPDF()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download PDF</button>
+      <button type="button" class="btn btn-secondary" onclick="printDispatchSlip()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:6px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print Dispatch Slip</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 8: Commercial Invoice (Invoice Builder Layout) -->
+<div class="modal-overlay" id="view-invoice-modal">
+  <div class="modal modal-lg doc-preview-modal" style="max-width:880px;">
+    <div class="modal-header doc-modal-header">
+      <span class="modal-title" id="view-invoice-title">Commercial Tax Invoice</span>
+      <button class="modal-close" onclick="APP.closeModal('view-invoice-modal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body doc-preview-body" id="view-invoice-content">
+      <!-- Injected dynamically matching Invoice Builder -->
+    </div>
+    <div class="modal-footer doc-modal-footer" id="view-invoice-footer">
+      <button type="button" class="btn btn-whatsapp" onclick="sendInvoiceWhatsApp()" title="Send Invoice on WhatsApp">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;margin-right:6px;"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2zm.01 1.67c4.54 0 8.24 3.7 8.24 8.24 0 2.2-.86 4.28-2.42 5.83a8.18 8.18 0 0 1-5.82 2.41h-.01c-1.48 0-2.93-.39-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.196 8.196 0 0 1-1.25-4.38c0-4.54 3.7-8.24 8.25-8.24zm4.52 11.66c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.13-1.06-.39-2.02-1.25-.75-.67-1.26-1.5-1.41-1.75-.14-.25-.02-.39.11-.51.11-.11.25-.29.37-.44.13-.15.17-.25.25-.42.08-.17.04-.31-.02-.44-.06-.13-.56-1.35-.77-1.85-.2-.49-.41-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.88.86-.88 2.1s.9 2.44 1.03 2.61c.13.17 1.77 2.7 4.29 3.78.6.26 1.07.41 1.44.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.06-.11-.22-.18-.47-.3z"/></svg>
+        Send on WhatsApp
+      </button>
+      <button type="button" class="btn btn-primary" onclick="downloadInvoicePDF()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download PDF</button>
+      <button type="button" class="btn btn-secondary" onclick="printInvoiceSlip()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:6px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print Invoice</button>
+      <a id="btn-open-invoice-builder" href="../Invoice%20Builder/index.html" target="_blank" class="btn btn-secondary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:6px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Open in Builder
+      </a>
     </div>
   </div>
 </div>
@@ -284,9 +740,17 @@
   </div>
 </div>
 
-<script src="../assets/js/database.js?v=1791542792536"></script>
-<script src="../assets/js/utils.js?v=1791542792536"></script>
-<script src="../assets/js/components/search-select.js?v=1791542792536"></script>
-<script src="../assets/js/app.js?v=1791542792536"></script><script src="../assets/js/orders.js?v=1791542792536"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="../Invoice Builder/js/invoice-pdf.js?v=1792916877412"></script>
+<script src="../assets/js/database.js?v=1792916877412"></script>
+<script src="../assets/js/inventory-core.js?v=1792916877412"></script>
+<script src="../assets/js/utils.js?v=1792916877412"></script>
+<script src="../assets/js/components/search-select.js?v=1792916877412"></script>
+<script src="../assets/js/app.js?v=1792916877412"></script>
+<script src="../assets/js/dispatch-core.js?v=1792916877412"></script>
+<script src="../assets/js/dispatch-ui.js?v=1792916877412"></script>
+<script src="../assets/js/orders.js?v=1792916877412"></script>
 </body></html>
 

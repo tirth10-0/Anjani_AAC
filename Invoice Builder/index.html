@@ -7,7 +7,7 @@
   <meta http-equiv="Expires" content="0">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Anjani ERP - Invoice Builder</title>
+  <title>Anjani Agri Care ERP - Invoice Builder</title>
   <meta name="description" content="Professional invoice generator." />
   <meta name="keywords" content="invoice, invoice builder, professional invoice, GST invoice" />
   <meta name="author" content="Invoice Builder" />
@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Invoice" />
   <link rel="manifest" href="public/manifest.json" />
-  <meta name="theme-color" content="#0C3925" />
+  <meta name="theme-color" content="#08281A" />
   <meta property="og:title" content="Invoice Builder" />
   <meta property="og:description" content="Professional invoice generator." />
   <meta property="og:type" content="website" />
@@ -30,19 +30,30 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
   <!-- App Scripts -->
-  <script src="js/api.js?v=1791542792536"></script>
-  <script src="js/tax-utils.js?v=1791542792536"></script>
-  <script src="js/storage.js?v=1791542792536"></script>
+  <script src="js/api.js?v=1792916877412"></script>
+  <script src="js/tax-utils.js?v=1792916877412"></script>
+  <script src="js/storage.js?v=1792916877412"></script>
   <!-- Styles -->
-  <link rel="stylesheet" href="css/main.css?v=1791542792536" />
-  <link rel="stylesheet" href="css/override.css?v=1791542792536" />
+  <link rel="stylesheet" href="css/main.css?v=1792916877412" />
+  <link rel="stylesheet" href="css/override.css?v=1792916877412" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../assets/js/database.js"></script>
     <link rel="icon" type="image/png" href="../assets/images/logo-rounded.png?v=1791036879151">
-  <link rel="apple-touch-icon" href="../assets/images/logo-rounded.png?v=1791036879151">
+  <script>
+    function handleErpDashboardNav(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      const path = window.location.pathname || '';
+      if (path.includes('/apps/')) {
+        window.location.href = '../../pages/dashboard.html';
+      } else {
+        window.location.href = '../pages/dashboard.html';
+      }
+    }
+    window.handleErpDashboardNav = handleErpDashboardNav;
+  </script>
 </head>
 
-<body>
+<body class="material-symbols-loaded">
 
   <!-- ── TOAST ──────────────────────────────────────────────────────── -->
   <div id="toast"></div>
@@ -53,18 +64,19 @@
   <!-- ── TOOLBAR ────────────────────────────────────────── -->
   <div id="toolbar">
     <!-- Brand -->
-    <div class="toolbar-brand">
-      <img src="../assets/images/logo.jpg" alt="Anjani Crop Care" id="navbar-logo" style="height:48px;width:48px;object-fit:contain;border-radius:10px;border:1px solid var(--border);flex-shrink:0;background:#ffffff;padding:2px;" />
+    <a href="index.html" class="toolbar-brand" id="brand-home-link" title="Anjani Agri Care - Start Fresh Invoice" style="display:flex;align-items:center;gap:12px;text-decoration:none;cursor:pointer;">
+      <img src="../assets/images/logo.jpg" alt="Anjani Agri Care" id="navbar-logo" style="height:48px;width:48px;object-fit:contain;border-radius:10px;border:1px solid var(--border);flex-shrink:0;background:#ffffff;padding:2px;" onerror="this.onerror=null; this.src='logo.jpg';" />
       <div class="brand-text">
-        <span class="brand-name" style="font-weight:800;font-size:19px;letter-spacing:-0.3px;color:#0C3925;">Anjani Crop Care</span>
+        <span class="brand-name" style="font-weight:800;font-size:19px;letter-spacing:-0.3px;color:#08281A;">Anjani Agri Care</span>
       </div>
-    </div>
+    </a>
 
     <div style="flex:1"></div>
 
     <!-- Toolbar Menu / Actions (Always visible and responsive) -->
+
     <div class="toolbar-actions" id="toolbar-actions">
-      <a class="btn btn-ghost" href="../pages/dashboard.html" style="margin-right:4px;" title="ERP Dashboard">
+      <a class="btn btn-ghost" href="../pages/dashboard.html" onclick="handleErpDashboardNav(event)" style="margin-right:4px;" title="ERP Dashboard">
         <span class="material-symbols-outlined">dashboard</span><span class="toolbar-btn-text"> ERP Dashboard</span>
       </a>
       <a class="btn btn-ghost" href="history.html" style="margin-right:4px;" title="Invoice History">
@@ -75,6 +87,10 @@
       </a>
       <button class="btn btn-save" id="save-cloud-btn" style="background:var(--primary);color:#ffffff !important;border:none;margin-right:4px;" title="Save Invoice">
         <span class="material-symbols-outlined" style="color:#ffffff !important">cloud_upload</span><span class="toolbar-btn-text" style="color:#ffffff !important"> Save</span>
+      </button>
+      <button class="btn btn-whatsapp" id="whatsapp-btn" style="background:#0C3925;color:#ffffff !important;border:none;margin-right:4px;display:inline-flex;align-items:center;gap:6px;font-weight:600;" title="Send Invoice on WhatsApp">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2zm.01 1.67c4.54 0 8.24 3.7 8.24 8.24 0 2.2-.86 4.28-2.42 5.83a8.18 8.18 0 0 1-5.82 2.41h-.01c-1.48 0-2.93-.39-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.196 8.196 0 0 1-1.25-4.38c0-4.54 3.7-8.24 8.25-8.24zm4.52 11.66c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.13-1.06-.39-2.02-1.25-.75-.67-1.26-1.5-1.41-1.75-.14-.25-.02-.39.11-.51.11-.11.25-.29.37-.44.13-.15.17-.25.25-.42.08-.17.04-.31-.02-.44-.06-.13-.56-1.35-.77-1.85-.2-.49-.41-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.88.86-.88 2.1s.9 2.44 1.03 2.61c.13.17 1.77 2.7 4.29 3.78.6.26 1.07.41 1.44.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.06-.11-.22-.18-.47-.3z"/></svg>
+        <span class="toolbar-btn-text" style="color:#ffffff !important"> WhatsApp</span>
       </button>
       <button class="btn btn-primary" id="pdf-btn" style="background:var(--primary);color:#ffffff !important;border:none;margin-right:4px;" title="Download PDF Invoice">
         <span class="material-symbols-outlined" style="color:#ffffff !important">download</span><span class="toolbar-btn-text" style="color:#ffffff !important"> Download PDF</span>
@@ -103,6 +119,10 @@
     <button class="mob-tab mob-action-tab" id="mob-save-btn" onclick="saveToCloud()">
       <span class="material-symbols-outlined">cloud_upload</span>
       <span class="mob-tab-label">Save</span>
+    </button>
+    <button class="mob-tab mob-action-tab mob-tab-whatsapp" id="mob-whatsapp-btn" title="Send on WhatsApp">
+      <svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2zm.01 1.67c4.54 0 8.24 3.7 8.24 8.24 0 2.2-.86 4.28-2.42 5.83a8.18 8.18 0 0 1-5.82 2.41h-.01c-1.48 0-2.93-.39-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.196 8.196 0 0 1-1.25-4.38c0-4.54 3.7-8.24 8.25-8.24zm4.52 11.66c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.13-1.06-.39-2.02-1.25-.75-.67-1.26-1.5-1.41-1.75-.14-.25-.02-.39.11-.51.11-.11.25-.29.37-.44.13-.15.17-.25.25-.42.08-.17.04-.31-.02-.44-.06-.13-.56-1.35-.77-1.85-.2-.49-.41-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.88.86-.88 2.1s.9 2.44 1.03 2.61c.13.17 1.77 2.7 4.29 3.78.6.26 1.07.41 1.44.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.06-.11-.22-.18-.47-.3z"/></svg>
+      <span class="mob-tab-label">WhatsApp</span>
     </button>
     <button class="mob-tab mob-action-tab mob-tab-pdf" id="mob-pdf-btn">
       <span class="material-symbols-outlined">picture_as_pdf</span>
@@ -134,6 +154,11 @@
 
     <!-- SIDEBAR -->
     <div id="sidebar">
+
+      <!-- MODE / EDIT INDICATOR BANNER (Hidden in New Invoice mode; only displayed when editing a saved invoice) -->
+      <div id="builder-mode-banner" class="mode-new" style="display:none;align-items:center;padding:8px 12px;margin-bottom:12px;border-radius:8px;font-size:12.5px;font-weight:600;">
+        <span id="builder-mode-text"></span>
+      </div>
 
       <!-- BILLING MODE SELECTION -->
       <div class="sb-section" style="padding: 10px; margin-bottom: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;">
@@ -168,22 +193,32 @@
 
           <!-- Logo Display -->
           <div class="logo-upload-area" id="logo-upload-area" style="cursor:default; border:none; background:transparent; display:flex; align-items:center; justify-content:center; padding:4px 0 16px 0; margin-bottom:12px;">
-            <img id="logo-preview-sb" src="../assets/images/logo.jpg" alt="Anjani Crop Care" style="height:100px;width:100px;max-width:140px;object-fit:contain;border-radius:14px;border:1.5px solid var(--border);box-shadow:var(--shadow-sm);background:#ffffff;padding:4px;display:block;" />
+            <img id="logo-preview-sb" src="../assets/images/logo.jpg" alt="Anjani Agri Care" style="height:100px;width:100px;max-width:140px;object-fit:contain;border-radius:14px;border:1.5px solid var(--border);box-shadow:var(--shadow-sm);background:#ffffff;padding:4px;display:block;" onerror="this.onerror=null; this.src='logo.jpg';" />
           </div>
 
           <span class="sb-label">Company Name</span>
-          <input class="sb-input" id="s-company" placeholder="Company Name" maxlength="60" value="Anjani Crop Care" />
+          <input class="sb-input" id="s-company" placeholder="Company Name" maxlength="60" value="Anjani Agri Care" />
           <span class="sb-label">Address</span>
           <input class="sb-input" id="s-address" placeholder="Street, City, State - PIN"
             value="Sr. No. 67 and 68, Plot No. 33, Siddhi Vinayak Industrial Zone, At: Virva, Tal: Lodhika, Dist: Rajkot, Gujarat." />
           <div class="sb-row">
             <div>
+              <span class="sb-label">State</span>
+              <input class="sb-input" id="s-company-state" placeholder="State" value="Gujarat" />
+            </div>
+            <div>
+              <span class="sb-label">Pincode</span>
+              <input class="sb-input" id="s-company-pincode" placeholder="Pincode" value="360024" maxlength="6" />
+            </div>
+          </div>
+          <div class="sb-row">
+            <div>
               <span class="sb-label">Phone</span>
-              <input class="sb-input" id="s-phone" placeholder="+91 9999999999" value="9664675227" />
+              <input class="sb-input" id="s-phone" placeholder="+91 9999999999" value="96646 75227" />
             </div>
             <div>
               <span class="sb-label">Email</span>
-              <input class="sb-input" id="s-email" placeholder="you@email.com" value="skagro3105@gmail.com" />
+              <input class="sb-input" id="s-email" placeholder="you@email.com" value="anjaniagricare@gmail.com" />
             </div>
           </div>
           <div class="sb-row">
@@ -193,7 +228,7 @@
             </div>
             <div>
               <span class="sb-label">Authorized By</span>
-              <input class="sb-input" id="s-signatory" placeholder="Name" value="Anjani Crop Care" />
+              <input class="sb-input" id="s-signatory" placeholder="Name" value="Tirth" />
             </div>
           </div>
         </div>
@@ -205,19 +240,19 @@
             Bank Details
           </div>
           <span class="sb-label">Bank Name</span>
-          <input class="sb-input" id="s-bank-name" placeholder="e.g. State Bank of India" value="PUNJAB NATIONAL BANK"/>
+          <input class="sb-input" id="s-bank-name" placeholder="e.g. State Bank of India" value=""/>
           <div class="sb-row">
             <div>
               <span class="sb-label">Account No.</span>
-              <input class="sb-input" id="s-bank-acc" placeholder="000123456789" value="9178002100002019"/>
+              <input class="sb-input" id="s-bank-acc" placeholder="000123456789" value=""/>
             </div>
             <div>
               <span class="sb-label">IFSC Code</span>
-              <input class="sb-input" id="s-bank-ifsc" placeholder="SBIN0001234" value="PUNB0917800"/>
+              <input class="sb-input" id="s-bank-ifsc" placeholder="SBIN0001234" value=""/>
             </div>
           </div>
           <span class="sb-label">UPI ID</span>
-          <input class="sb-input" id="s-upi" placeholder="yourname@bank" value="9427213943m@pnb" onchange="updateQR()" />
+          <input class="sb-input" id="s-upi" placeholder="yourname@bank" value="" onchange="updateQR()" />
         </div>
 
         <!-- NOTES / TERMS -->
@@ -230,9 +265,7 @@
           <textarea class="sb-input sb-textarea" id="s-intro" placeholder="Dear Sir/Mam, Thank you for your inquiry...">Dear Sir/Mam,
 Thank you for your valuable inquiry. We are pleased to quote as below:</textarea>
           <span class="sb-label">Terms &amp; Conditions</span>
-          <textarea class="sb-input sb-textarea" id="s-terms" placeholder="Payment within 30 days...">We hope you find our offer to be in line with your requirement.
-Your goods will be dispatched within 2-3 days after payment is received.
-Wednesday and Sunday Company Holiday.</textarea>
+          <textarea class="sb-input sb-textarea" id="s-terms" placeholder="Payment within 30 days..."></textarea>
         </div>
 
       </div><!-- /fixed-info-block -->
@@ -293,6 +326,54 @@ Wednesday and Sunday Company Holiday.</textarea>
         <input class="sb-input" id="s-client-addr" placeholder="City, State" />
         <div class="sb-row">
           <div>
+            <span class="sb-label">State</span>
+            <input class="sb-input" id="s-client-state" placeholder="State" list="indian-states-list" autocomplete="off" />
+            <datalist id="indian-states-list">
+              <option value="Andhra Pradesh">
+              <option value="Arunachal Pradesh">
+              <option value="Assam">
+              <option value="Bihar">
+              <option value="Chhattisgarh">
+              <option value="Goa">
+              <option value="Gujarat">
+              <option value="Haryana">
+              <option value="Himachal Pradesh">
+              <option value="Jharkhand">
+              <option value="Karnataka">
+              <option value="Kerala">
+              <option value="Madhya Pradesh">
+              <option value="Maharashtra">
+              <option value="Manipur">
+              <option value="Meghalaya">
+              <option value="Mizoram">
+              <option value="Nagaland">
+              <option value="Odisha">
+              <option value="Punjab">
+              <option value="Rajasthan">
+              <option value="Sikkim">
+              <option value="Tamil Nadu">
+              <option value="Telangana">
+              <option value="Tripura">
+              <option value="Uttar Pradesh">
+              <option value="Uttarakhand">
+              <option value="West Bengal">
+              <option value="Andaman and Nicobar Islands">
+              <option value="Chandigarh">
+              <option value="Dadra and Nagar Haveli and Daman and Diu">
+              <option value="Delhi">
+              <option value="Jammu and Kashmir">
+              <option value="Ladakh">
+              <option value="Lakshadweep">
+              <option value="Puducherry">
+            </datalist>
+          </div>
+          <div>
+            <span class="sb-label">Pincode</span>
+            <input class="sb-input" id="s-client-pincode" placeholder="Pincode" maxlength="6" />
+          </div>
+        </div>
+        <div class="sb-row">
+          <div>
             <span class="sb-label">Phone</span>
             <input class="sb-input" id="s-client-phone" placeholder="Phone" />
           </div>
@@ -333,8 +414,10 @@ Wednesday and Sunday Company Holiday.</textarea>
         <select class="sb-input select-styled" id="gst-rate-display" onchange="setTaxType(this.value); recalcAll(); autoSave()">
           <option value="NONE" selected>None GST 0%</option>
           <option value="GST5">GST 5%</option>
+          <option value="GST12">GST 12%</option>
           <option value="GST18">GST 18%</option>
           <option value="IGST5">IGST 5%</option>
+          <option value="IGST12">IGST 12%</option>
           <option value="IGST18">IGST 18%</option>
         </select>
         <div class="toggle-row">
@@ -356,13 +439,13 @@ Wednesday and Sunday Company Holiday.</textarea>
         <!-- HEADER: Logo | Company (center) | Invoice Box -->
         <div class="paper-header">
           <div class="paper-logo-section" style="display:flex;align-items:center;justify-content:flex-start;">
-            <img id="paper-logo" src="../assets/images/logo.jpg" alt="Anjani Crop Care" style="height:96px;width:96px;max-width:140px;max-height:105px;object-fit:contain;border:none;display:block;background:transparent;padding:0;box-shadow:none;" />
+            <img id="paper-logo" src="../assets/images/logo.jpg" alt="Anjani Agri Care" style="height:96px;width:96px;max-width:140px;max-height:105px;object-fit:contain;border:none;display:block;background:transparent;padding:0;box-shadow:none;" onerror="this.onerror=null; this.src='logo.jpg';" />
           </div>
           <div class="paper-company-center">
-            <div class="paper-company-name" id="p-company" style="color:#0C3925 !important;">Anjani Crop Care</div>
+            <div class="paper-company-name" id="p-company" style="color:#08281A !important;">Anjani Agri Care</div>
             <div class="paper-company-sub">
               <span id="p-address">Sr. No. 67 and 68, Plot No. 33, Siddhi Vinayak Industrial Zone, At: Virva, Tal: Lodhika, Dist: Rajkot, Gujarat.</span><br />
-              <span id="p-phone">—</span><span id="p-email-phone-sep"> &nbsp;|&nbsp; </span><span id="p-email">skagro3105@gmail.com</span><br />
+              <span id="p-phone">—</span><span id="p-email-phone-sep"> &nbsp;|&nbsp; </span><span id="p-email">anjaniagricare@gmail.com</span><br />
               GSTIN: <span id="p-gstin">24AERFS1718Q1ZB</span>
             </div>
           </div>
@@ -372,6 +455,8 @@ Wednesday and Sunday Company Holiday.</textarea>
               Invoice No: <strong id="p-inv-num">—</strong><br />
               Date: <strong id="p-inv-date">—</strong><br />
               <span id="p-due-line" style="display:none">Due: <strong id="p-due-date"></strong><br /></span>
+              <span id="p-disp-line" style="display:none">Dispatch: <strong id="p-disp-no"></strong><br /></span>
+              <span id="p-veh-line" style="display:none">Vehicle: <strong id="p-veh-no"></strong><br /></span>
             </div>
           </div>
           <div class="gst-doc-strip" id="p-gst-doc-strip">
@@ -381,17 +466,35 @@ Wednesday and Sunday Company Holiday.</textarea>
           </div>
         </div>
 
-        <!-- BILL FROM / BILL TO -->
+        <!-- BILL FROM / BILL TO (Matching Image 3 Format) -->
         <div class="paper-to">
           <div>
-            <div class="to-label">Bill From</div>
-            <div class="to-main" id="p-from-name">Anjani Crop Care</div>
-            <div class="to-sub" id="p-from-sub">Sr. No. 67 and 68, Plot No. 33, Siddhi Vinayak Industrial Zone, At: Virva, Tal: Lodhika, Dist: Rajkot, Gujarat.</div>
+            <div class="to-label">BILL FROM</div>
+            <div class="to-main" id="p-from-name">Anjani Agri Care</div>
+            <div class="to-address" id="p-from-addr" style="font-size:11.5px; font-weight:500; color:#1e293b; margin-top:2px; line-height:1.4;">Sr. No. 67 and 68, Plot No. 33, Siddhi Vinayak Industrial Zone, At: Virva, Tal: Lodhika, Dist: Rajkot, Gujarat.</div>
+            <div class="to-grid" id="p-from-grid" style="display:grid; grid-template-columns:140px 1fr; gap:2px 16px; font-size:11.5px; line-height:1.4; margin-top:3px;">
+              <div><span style="color:#475569;">State:</span> <strong id="p-from-state" style="color:#0f172a; font-weight:600;">Gujarat</strong></div>
+              <div><span style="color:#475569;">Pincode:</span> <strong id="p-from-pin" style="color:#0f172a; font-weight:600;">360024</strong></div>
+              <div><span style="color:#475569;">Phone:</span> <strong id="p-from-phone" style="color:#0f172a; font-weight:600;">96646 75227</strong></div>
+              <div><span style="color:#475569;">GSTIN:</span> <strong id="p-from-gstin" style="color:#0f172a; font-weight:600;">24AERFS1718Q1ZB</strong></div>
+            </div>
+            <div id="p-from-sub" style="display:none;"></div>
           </div>
           <div>
-            <div class="to-label">Bill To</div>
+            <div class="to-label">BILL TO</div>
             <div class="to-main" id="p-client-name">Client Name</div>
-            <div class="to-sub" id="p-client-sub"></div>
+            <div class="to-address" id="p-client-addr-text" style="display:none; font-size:11.5px; font-weight:500; color:#1e293b; margin-top:2px; line-height:1.4;"></div>
+            <div class="to-grid" id="p-client-grid" style="display:flex; flex-direction:column; gap:2px; font-size:11.5px; line-height:1.4; margin-top:3px;">
+              <div id="p-client-row-1" style="display:none; gap:16px;">
+                <div id="p-client-state-row" style="min-width:130px; display:none;"><span style="color:#475569;">State:</span> <strong id="p-client-state-text" style="color:#0f172a; font-weight:600;"></strong></div>
+                <div id="p-client-pin-row" style="display:none;"><span style="color:#475569;">Pincode:</span> <strong id="p-client-pin-text" style="color:#0f172a; font-weight:600;"></strong></div>
+              </div>
+              <div id="p-client-row-2" style="display:none; gap:16px;">
+                <div id="p-client-phone-row" style="min-width:130px; display:none;"><span style="color:#475569;">Phone:</span> <strong id="p-client-phone-text" style="color:#0f172a; font-weight:600;"></strong></div>
+                <div id="p-client-gstin-row" style="display:none;"><span style="color:#475569;">GSTIN:</span> <strong id="p-client-gstin-text" style="color:#0f172a; font-weight:600;"></strong></div>
+              </div>
+            </div>
+            <div id="p-client-sub" style="display:none;"></div>
           </div>
         </div>
 
@@ -400,16 +503,17 @@ Wednesday and Sunday Company Holiday.</textarea>
           Dear Sir/Mam, Thank you for your valuable inquiry. We are pleased to quote as below:
         </div>
 
-        <!-- ITEMS TABLE -->
+        <!-- ITEMS TABLE (Calibrated to Image 1) -->
         <table class="items-table" id="items-table">
           <thead>
             <tr>
-              <th>No.</th>
-              <th>Brand Name</th>
-              <th>Product Name</th>
-              <th>Qty</th>
-              <th>Price</th>
-              <th>Total (₹)</th>
+              <th style="width:4%; text-align:center;">No.</th>
+              <th style="width:34%; text-align:left;">Products</th>
+              <th style="width:14%; text-align:center;">Pack Size</th>
+              <th style="width:10%; text-align:center;">Boxes</th>
+              <th style="width:12%; text-align:center;">Qty (Units)</th>
+              <th style="width:12%; text-align:right;">Rate (₹)</th>
+              <th style="width:14%; text-align:right;">Total (₹)</th>
             </tr>
           </thead>
           <tbody id="items-tbody"></tbody>
@@ -448,7 +552,7 @@ Wednesday and Sunday Company Holiday.</textarea>
         </div>
 
         <!-- NOTES/TERMS -->
-        <div class="paper-notes" id="p-terms" style="display:none"></div>
+        <div class="paper-notes" id="p-terms" style="display:none;"></div>
 
         <!-- FOOTER: Bank + QR + Signature -->
         <div class="paper-footer">
@@ -467,10 +571,10 @@ Wednesday and Sunday Company Holiday.</textarea>
 
           <div class="sig-block">
             <div class="sig-label">Authorized Signature</div>
-            <img id="sig-img" src="signature.jpg" alt="Signature"
-              style="max-width:120px;max-height:40px;margin-bottom:6px;border-radius:4px;border:1px solid #e2e8f0;display:block;margin:0 auto;"
-              onerror="this.style.display='none'" />
-            <div class="sig-name" id="p-signatory">Anjani Crop Care</div>
+            <div id="sig-text" style="height:36px; display:flex; align-items:center; justify-content:center; font-family:'Brush Script MT', 'Segoe Script', cursive, sans-serif; font-size:24px; font-weight:700; color:#08281A; margin:2px auto 4px;">Tirth</div>
+            <img id="sig-img" src="signature.jpg" alt="Signature" style="display:none;" />
+            <div class="sig-line"></div>
+            <div class="sig-name" id="p-signatory">Authorized Signatory</div>
           </div>
         </div>
 
@@ -511,8 +615,8 @@ Wednesday and Sunday Company Holiday.</textarea>
   </div>
 
   <!-- Main App Script (last, so DOM is ready) -->
-  <script src="js/invoice-pdf.js?v=1791542792536"></script>
-  <script src="js/main.js?v=1791542792536"></script>
+  <script src="js/invoice-pdf.js?v=1792916877412"></script>
+  <script src="js/main.js?v=1792916877412"></script>
 
 </body>
 

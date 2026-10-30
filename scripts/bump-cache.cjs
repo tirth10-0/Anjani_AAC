@@ -24,4 +24,19 @@ function updateHtmlFiles(dir) {
 }
 
 updateHtmlFiles(process.cwd());
+
+// Mirror Invoice Builder to apps/Invoice Builder to maintain exact sync
+const srcIb = path.join(process.cwd(), 'Invoice Builder');
+const destIb = path.join(process.cwd(), 'apps', 'Invoice Builder');
+if (fs.existsSync(srcIb) && fs.existsSync(destIb)) {
+  ['index.html', 'history.html', 'master.html'].forEach(f => {
+    const srcFile = path.join(srcIb, f);
+    const destFile = path.join(destIb, f);
+    if (fs.existsSync(srcFile)) {
+      fs.copyFileSync(srcFile, destFile);
+      console.log(`Synchronized apps/Invoice Builder/${f}`);
+    }
+  });
+}
+
 console.log(`Cache buster finished successfully with timestamp: ${newTs}`);

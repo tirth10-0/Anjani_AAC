@@ -122,30 +122,40 @@ async function calculateBatch() {
         <div class="form-section-title">Scaled Ingredient Requirements</div>
         ${ingredients.length === 0 ? 
           `<p class="text-muted text-sm" style="padding:12px">No ingredient breakdown is stored for this batch yet. The calculator can still show the selected batch metadata and current target-product stock.</p>` :
-          `<table class="data-table" style="margin-bottom:16px">
-            <thead><tr><th>Ingredient</th><th>Required Qty</th><th>Unit</th><th>In Stock</th><th>Status</th></tr></thead>
-            <tbody>${ingredients.map(ing => {
-              const reqQty = calcScaledRequirement(ing, batchInput, originalBatch);
-              const invItem = allInventoryItems.find(i => i.id === ing.product_id);
-              const availStock = invItem ? parseFloat(invItem.stock) || 0 : 0;
-              const sufficient = availStock >= reqQty;
-              return `<tr>
-                <td style="font-weight:600">${ing.product_name || '—'}</td>
-                <td style="font-weight:700;color:var(--accent)">${reqQty.toFixed(3)}</td>
-                <td>${ing.unit || '—'}</td>
-                <td>${availStock.toFixed(2)}</td>
-                <td>${sufficient ? '<span class="badge badge-success">Sufficient</span>' : 
-                     '<span class="badge badge-danger">Insufficient</span>'}</td>
-              </tr>`;
-            }).join('')}</tbody>
-          </table>`
+          `<div class="table-scroll-wrap" style="width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:8px;margin-bottom:16px;">
+            <table class="data-table" style="margin:0;width:100%;min-width:480px;">
+              <thead>
+                <tr>
+                  <th style="white-space:nowrap;">Ingredient</th>
+                  <th style="white-space:nowrap;">Required Qty</th>
+                  <th style="white-space:nowrap;">Unit</th>
+                  <th style="white-space:nowrap;">In Stock</th>
+                  <th style="white-space:nowrap;">Status</th>
+                </tr>
+              </thead>
+              <tbody>${ingredients.map(ing => {
+                const reqQty = calcScaledRequirement(ing, batchInput, originalBatch);
+                const invItem = allInventoryItems.find(i => i.id === ing.product_id);
+                const availStock = invItem ? parseFloat(invItem.stock) || 0 : 0;
+                const sufficient = availStock >= reqQty;
+                return `<tr>
+                  <td style="font-weight:600">${ing.product_name || '—'}</td>
+                  <td style="font-weight:700;color:var(--accent)">${reqQty.toFixed(3)}</td>
+                  <td>${ing.unit || '—'}</td>
+                  <td>${availStock.toFixed(2)}</td>
+                  <td>${sufficient ? '<span class="badge badge-success">Sufficient</span>' : 
+                       '<span class="badge badge-danger">Insufficient</span>'}</td>
+                </tr>`;
+              }).join('')}</tbody>
+            </table>
+          </div>`
         }
 
         <div style="padding:12px;border-radius:var(--radius-sm);background:var(--bg);margin-top:12px;font-size:12px;color:var(--text-muted)">
           Current stock for this target product: <strong>${currentStock === null ? '—' : currentStock.toFixed(2)}</strong>
         </div>
         
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px">
+        <div class="calc-metric-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:16px">
           <div style="background:var(--accent-light);border-radius:var(--radius-sm);padding:12px;text-align:center">
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--accent);letter-spacing:0.06em">Batch Size</div>
             <div style="font-size:20px;font-weight:800;color:var(--accent);margin-top:4px">${batchInput} ${batchUnit}</div>

@@ -719,9 +719,9 @@ app.all('/api', async (req, res) => {
         const clientAddress = inv.customer?.address || inv.ClientAddress || '';
         const clientPhone = inv.customer?.phone || inv.ClientPhone || '';
         const clientGSTIN = inv.customer?.gstin || inv.ClientGSTIN || '';
-        const clientState = inv.customer?.state || inv.ClientState || 'Gujarat';
+        const clientState = inv.customer?.state || inv.ClientState || '';
         const clientStateCode = inv.customer?.stateCode || inv.ClientStateCode || '24';
-        const placeOfSupply = inv.customer?.placeOfSupply || inv.PlaceOfSupply || 'Gujarat';
+        const placeOfSupply = inv.customer?.placeOfSupply || inv.PlaceOfSupply || clientState || '';
         
         const subtotal = parseFloat(inv.calculations?.subtotal || inv.Subtotal || 0);
         const taxableAmount = parseFloat(inv.calculations?.subtotal || inv.TaxableAmount || 0);
@@ -886,7 +886,7 @@ app.get('*', (req, res, next) => {
 // Start Server
 app.listen(PORT, async () => {
   console.log(`\n========================================================================`);
-  console.log(`Anjani Crop Care Invoice Server listening on http://localhost:${PORT}`);
+  console.log(`Anjani Agri Care Invoice Server listening on http://localhost:${PORT}`);
   console.log(`Serving static files from: ${path.resolve(__dirname)}`);
   console.log(`========================================================================\n`);
   

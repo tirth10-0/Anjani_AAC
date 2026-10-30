@@ -7,8 +7,10 @@
 const TAX_TYPE_CONFIG = {
   NONE: { key: 'NONE', label: 'None GST 0%', rate: 0, cgstRate: 0, sgstRate: 0, igstRate: 0 },
   GST5: { key: 'GST5', label: 'GST 5%', rate: 5, cgstRate: 2.5, sgstRate: 2.5, igstRate: 0 },
+  GST12: { key: 'GST12', label: 'GST 12%', rate: 12, cgstRate: 6, sgstRate: 6, igstRate: 0 },
   GST18: { key: 'GST18', label: 'GST 18%', rate: 18, cgstRate: 9, sgstRate: 9, igstRate: 0 },
   IGST5: { key: 'IGST5', label: 'IGST 5%', rate: 5, cgstRate: 0, sgstRate: 0, igstRate: 5 },
+  IGST12: { key: 'IGST12', label: 'IGST 12%', rate: 12, cgstRate: 0, sgstRate: 0, igstRate: 12 },
   IGST18: { key: 'IGST18', label: 'IGST 18%', rate: 18, cgstRate: 0, sgstRate: 0, igstRate: 18 }
 };
 
@@ -21,13 +23,16 @@ function normalizeTaxType(value) {
     if (TAX_TYPE_CONFIG[normalized]) return normalized;
     if (normalized === 'NONE GST 0%') return 'NONE';
     if (normalized === 'GST 5%' || normalized === 'GST@5%' || normalized === '5' || normalized === 'GST5') return 'GST5';
+    if (normalized === 'GST 12%' || normalized === 'GST@12%' || normalized === '12' || normalized === 'GST12') return 'GST12';
     if (normalized === 'GST 18%' || normalized === 'GST@18%' || normalized === '18' || normalized === 'GST18') return 'GST18';
     if (normalized === 'IGST 5%' || normalized === 'IGST5') return 'IGST5';
+    if (normalized === 'IGST 12%' || normalized === 'IGST12') return 'IGST12';
     if (normalized === 'IGST 18%' || normalized === 'IGST18') return 'IGST18';
     return 'NONE';
   }
   if (typeof value === 'number') {
     if (value === 5) return 'GST5';
+    if (value === 12) return 'GST12';
     if (value === 18) return 'GST18';
     return 'NONE';
   }
@@ -59,6 +64,7 @@ function calculateInvoiceTotals(subtotal, taxType, dueAmount = 0) {
     cgstAmount,
     sgstAmount,
     igstAmount,
+    dueAmount: safeDue,
     totalTax,
     grandTotal
   };
@@ -108,12 +114,38 @@ function getTaxOptionList() {
   return [
     { label: 'None GST 0%', key: 'NONE' },
     { label: 'GST 5%', key: 'GST5' },
+    { label: 'GST 12%', key: 'GST12' },
     { label: 'GST 18%', key: 'GST18' },
     { label: 'IGST 5%', key: 'IGST5' },
+    { label: 'IGST 12%', key: 'IGST12' },
     { label: 'IGST 18%', key: 'IGST18' }
   ];
 }
 
 function formatTaxLabel(taxType) {
   return getTaxConfig(taxType).label;
+}
+
+if (typeof window !== 'undefined') {
+  window.TAX_TYPE_CONFIG = TAX_TYPE_CONFIG;
+  window.TAX_TYPES = TAX_TYPES;
+  window.normalizeTaxType = normalizeTaxType;
+  window.getTaxConfig = getTaxConfig;
+  window.calculateInvoiceTotals = calculateInvoiceTotals;
+  window.calculateRowGstTotals = calculateRowGstTotals;
+  window.getTaxOptionList = getTaxOptionList;
+  window.formatTaxLabel = formatTaxLabel;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    TAX_TYPE_CONFIG,
+    TAX_TYPES,
+    normalizeTaxType,
+    getTaxConfig,
+    calculateInvoiceTotals,
+    calculateRowGstTotals,
+    getTaxOptionList,
+    formatTaxLabel
+  };
 }

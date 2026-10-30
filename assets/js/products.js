@@ -55,7 +55,8 @@ function syncCatalogUnits() {
   (allPackagingOptions || []).forEach(pkg => {
     if (pkg.packaging_size) {
       const prod = (allProducts || []).find(p => p.id === pkg.product_id);
-      const unit = prod?.unit || 'Litre';
+      if (!prod) return;
+      const unit = prod.unit || 'Litre';
       if (deletedPackagingUnits.includes(unit)) return;
       if (!packagingUnits[unit]) {
         packagingUnits[unit] = [];
@@ -499,15 +500,33 @@ async function loadProducts() {
     await DB.initDB();
     
     // Fetch technical suggestions, products, and packaging options all in parallel
+    const prodQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('products').select('*').order('id', { ascending: false })) : window.dbClient.from('products').select('*').order('id', { ascending: false });
+    const packQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('product_packaging').select('*')) : window.dbClient.from('product_packaging').select('*');
+
     const [, prodRes, packRes] = await Promise.all([
       loadTechnicalInventorySuggestions(),
-      window.dbClient.from('products').select('*').order('id', { ascending: false }),
-      window.dbClient.from('product_packaging').select('*')
+      prodQuery,
+      packQuery
     ]);
     if (prodRes.error) throw prodRes.error;
     if (packRes.error) throw packRes.error;
     allProducts = UTILS.sortLatestFirst(prodRes.data || []);
-    allPackagingOptions = packRes.data || [];
+    const rawPackaging = packRes.data || [];
+
+    // Filter out any orphaned packaging options whose parent product was deleted
+    allPackagingOptions = rawPackaging.filter(pkg => allProducts.some(p => p.id === pkg.product_id));
+
+    // Asynchronously cleanup any orphaned packaging records from database if found
+    const orphanIds = rawPackaging
+      .filter(pkg => !allProducts.some(p => p.id === pkg.product_id))
+      .map(pkg => pkg.id);
+    if (orphanIds.length > 0) {
+      console.warn(`Cleaning up ${orphanIds.length} orphaned packaging variants from database...`);
+      window.dbClient.from('product_packaging').delete().in('id', orphanIds).then(({ error }) => {
+        if (error) console.warn('Failed to clean up orphaned packaging variants:', error);
+        else console.log(`Cleaned up ${orphanIds.length} orphaned packaging variants.`);
+      });
+    }
 
     syncCatalogUnits();
     updateUnitSelect();
@@ -520,6 +539,7 @@ async function loadProducts() {
     updatePageDebug('FAILED', '#EF4444');
     APP.showToast('Failed to load products: ' + err.message, 'error');
     renderProductsTable([]);
+    renderPackagingTable([]);
   }
 }
 
@@ -541,7 +561,7 @@ function renderProductsTable(data) {
 
     return `<tr>
       <td class="cell-bold">${p.name}</td>
-      <td class="cell-mono">${p.batch_no || '—'}</td>
+
       <td>${p.brand || '—'}</td>
       <td><span class="badge badge-purple">${UTILS.formatCategoryLabel(p.category) || '—'}</span></td>
       <td>${toxBadge}</td>
@@ -565,7 +585,8 @@ function renderPackagingTable(data) {
 
   const groupMap = {};
   data.forEach(pkg => {
-    const product = allProducts.find(p => p.id === pkg.product_id) || { id: pkg.product_id, name: 'N/A', purchase_price: 0, sell_price: 0 };
+    const product = allProducts.find(p => p.id === pkg.product_id);
+    if (!product) return; // Skip orphaned packaging variants whose parent was deleted
     if (query && !product.name.toLowerCase().includes(query)) return;
     if (!groupMap[pkg.product_id]) {
       groupMap[pkg.product_id] = { product, variants: [] };
@@ -575,8 +596,12 @@ function renderPackagingTable(data) {
 
   const groups = Object.values(groupMap).sort((a, b) => (a.product?.name || '').localeCompare(b.product?.name || '', undefined, { sensitivity: 'base' }));
   const totalVariants = groups.reduce((s, g) => s + g.variants.length, 0);
-  document.getElementById('packaging-total-info').textContent =
-    `${groups.length} product${groups.length !== 1 ? 's' : ''} · ${totalVariants} variant${totalVariants !== 1 ? 's' : ''}`;
+  const totalInfoEl = document.getElementById('packaging-total-info');
+  if (totalInfoEl) {
+    totalInfoEl.textContent = groups.length
+      ? `${groups.length} product${groups.length !== 1 ? 's' : ''} · ${totalVariants} variant${totalVariants !== 1 ? 's' : ''}`
+      : '0 products · 0 variants';
+  }
 
   if (!groups.length) {
     tbody.innerHTML = `<tr class="empty-row"><td colspan="6"><div class="empty-state"><h3>No packaging variants</h3><p>Add packaging options to products.</p></div></td></tr>`;
@@ -894,7 +919,7 @@ function renderPackagingOptionsContainer() {
           <div class="packaging-card-fields" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div class="packaging-field packaging-field-size" style="grid-column: span 2;">
               <label style="font-size:11px; color:var(--text-secondary); font-weight:700; display:block; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.04em;">Packaging Size <span style="color:var(--danger)">*</span></label>
-              <select class="form-select" onchange="onPackagingSizeChange(${idx}, this.value)" style="font-size: 13px; padding: 10px 12px; width: 100%; height:42px; box-sizing:border-box;">
+              <select class="form-select packaging-size-select" data-searchable="true" onchange="onPackagingSizeChange(${idx}, this.value)" style="width: 100%;">
                 <option value="">Select size...</option>
                 ${availableSizes.map(size => `<option value="${size}" ${opt.packaging_size === size ? 'selected' : ''}>${size}</option>`).join('')}
                 ${(opt.packaging_size && !availableSizes.includes(opt.packaging_size)) ? `<option value="${opt.packaging_size}" selected>${opt.packaging_size} (Custom)</option>` : ''}
@@ -922,11 +947,12 @@ function renderPackagingOptionsContainer() {
   } else {
     container.innerHTML = `
       <div style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <table style="width: 100%; min-width: 680px; border-collapse: collapse; font-size: 13px;">
           <thead>
             <tr style="background: var(--bg);">
               <th style="padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border); width: 80px;">Base</th>
               <th style="padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border);">Packaging Size</th>
+              <th style="padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border); width: 100px;">Units / Box</th>
               <th style="padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border); width: 140px;">Purchase Price (₹)</th>
               <th style="padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border); width: 140px;">Selling Price (₹)</th>
               <th style="padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border); width: 80px;">Actions</th>
@@ -944,7 +970,7 @@ function renderPackagingOptionsContainer() {
                   </td>
                   <td style="padding: 8px 12px;">
                     <div style="display:flex; gap:6px; align-items:center;">
-                      <select class="form-select" onchange="onPackagingSizeChange(${idx}, this.value)" style="font-size: 12px; padding: 6px 8px; flex:1;">
+                      <select class="form-select packaging-size-select" data-searchable="true" onchange="onPackagingSizeChange(${idx}, this.value)" style="width: 100%;">
                         <option value="">Select size...</option>
                         ${availableSizes.map(size => `<option value="${size}" ${opt.packaging_size === size ? 'selected' : ''}>${size}</option>`).join('')}
                         ${(opt.packaging_size && !availableSizes.includes(opt.packaging_size)) ? `<option value="${opt.packaging_size}" selected>${opt.packaging_size} (Custom)</option>` : ''}
@@ -956,6 +982,10 @@ function renderPackagingOptionsContainer() {
                         <input type="text" class="form-input" value="${opt.packaging_size || ''}" oninput="currentPackagingOptions[${idx}].packaging_size = this.value" style="font-size: 12px; padding: 4px 8px; flex: 1;" placeholder="Enter size e.g. 5 Ltr">
                         <button type="button" class="btn btn-sm btn-secondary" onclick="saveCustomSizeAsPreset(${idx})" title="Save to preset list for this unit" style="font-size:11px; padding:2px 8px; height:auto; white-space:nowrap;">+ Preset</button>
                       </div>` : ''}
+                  </td>
+                  <td style="padding: 8px 12px;">
+                    <input type="number" class="form-input" placeholder="10" value="${opt.units_per_box || 10}" min="1" step="1"
+                      onchange="currentPackagingOptions[${idx}].units_per_box = parseInt(this.value, 10) || 10" style="font-size: 12px; padding: 6px 8px; width: 100%;">
                   </td>
                   <td style="padding: 8px 12px;">
                     <input type="number" class="form-input" placeholder="0.00" value="${opt.purchase_price || 0}" step="0.01" 
@@ -978,7 +1008,9 @@ function renderPackagingOptionsContainer() {
     `;
   }
   setTimeout(() => {
-    if (window.UTILS?.initAllAutocompleteSelects) {
+    if (window.UniversalSearchSelect) {
+      window.UniversalSearchSelect.initAll(container);
+    } else if (window.UTILS?.initAllAutocompleteSelects) {
       UTILS.initAllAutocompleteSelects();
     }
   }, 10);
@@ -998,7 +1030,8 @@ async function saveProduct() {
   if (saveBtn) APP.setButtonLoading(saveBtn, true, editingProductId ? 'Updating...' : 'Saving...');
 
   try {
-    const defaultGst = document.getElementById('default-gst')?.value || '';
+    const defaultGstRaw = document.getElementById('default-gst')?.value?.trim();
+    const defaultGst = (defaultGstRaw === '' || defaultGstRaw === undefined || isNaN(Number(defaultGstRaw))) ? 0 : parseFloat(defaultGstRaw);
     const productPurchasePrice = baseVariant.purchase_price || 0;
     const productSellPrice = baseVariant.sell_price || 0;
 
@@ -1021,7 +1054,9 @@ async function saveProduct() {
       sell_price: productSellPrice,
       gst: defaultGst,
       description: d.description || '',
-      inventory_item_id: matchedInvId
+      inventory_item_id: matchedInvId,
+      packaging: baseVariant?.packaging_size || '',
+      item_size: baseVariant?.packaging_size || ''
     };
     if (d.batch_no) {
       payload.batch_no = d.batch_no;
@@ -1041,10 +1076,14 @@ async function saveProduct() {
       const { error: delErr } = await window.dbClient.from('product_packaging').delete().eq('product_id', editingProductId);
       if (delErr) throw delErr;
     } else {
-      let { data: prodData, error: prodErr } = await window.dbClient.from('products').insert([payload]).select();
+      const stampedPayload = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(payload, 'products') : payload;
+      delete stampedPayload.branch_id;
+      delete stampedPayload.warehouse_id;
+
+      let { data: prodData, error: prodErr } = await window.dbClient.from('products').insert([stampedPayload]).select();
       if (prodErr && prodErr.message && prodErr.message.includes('inventory_item_id')) {
-        delete payload.inventory_item_id;
-        const retry = await window.dbClient.from('products').insert([payload]).select();
+        delete stampedPayload.inventory_item_id;
+        const retry = await window.dbClient.from('products').insert([stampedPayload]).select();
         prodData = retry.data;
         prodErr = retry.error;
       }
@@ -1056,12 +1095,31 @@ async function saveProduct() {
       product_id: savedProductId,
       packaging_size: opt.packaging_size,
       purchase_price: opt.is_base ? (parseFloat(opt.purchase_price) || 0) : 0,
-      sell_price: parseFloat(opt.sell_price) || 0
-      // is_base is not in the database schema; it is inferred based on purchase_price > 0
+      sell_price: parseFloat(opt.sell_price) || 0,
+      units_per_box: parseInt(opt.units_per_box, 10) || 10,
+      bottle_inventory_id: opt.bottle_inventory_id ? parseInt(opt.bottle_inventory_id, 10) : null,
+      cap_inventory_id: opt.cap_inventory_id ? parseInt(opt.cap_inventory_id, 10) : null,
+      label_inventory_id: opt.label_inventory_id ? parseInt(opt.label_inventory_id, 10) : null,
+      carton_inventory_id: opt.carton_inventory_id ? parseInt(opt.carton_inventory_id, 10) : null
     }));
 
     if (pkgPayload.length > 0) {
-      const { error: pkgErr } = await window.dbClient.from('product_packaging').insert(pkgPayload);
+      const stampedPkg = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(pkgPayload, 'product_packaging') : pkgPayload;
+      stampedPkg.forEach(p => {
+        delete p.branch_id;
+        delete p.warehouse_id;
+      });
+
+      let { error: pkgErr } = await window.dbClient.from('product_packaging').insert(stampedPkg);
+      if (pkgErr && pkgErr.message && (pkgErr.message.includes('bottle_inventory_id') || pkgErr.message.includes('column of \'product_packaging\'') || pkgErr.message.includes('schema cache'))) {
+        console.warn('Retrying product_packaging insert without unmigrated BOM columns...');
+        const cleanPkg = stampedPkg.map(p => {
+          const { bottle_inventory_id, cap_inventory_id, label_inventory_id, carton_inventory_id, ...rest } = p;
+          return rest;
+        });
+        const retry = await window.dbClient.from('product_packaging').insert(cleanPkg);
+        pkgErr = retry.error;
+      }
       if (pkgErr) throw pkgErr;
     }
 
@@ -1079,10 +1137,17 @@ async function saveProduct() {
 async function deleteProduct(id) {
   APP.showConfirm('Delete this product and its packaging variants?', async () => {
     try {
+      // 1. Delete associated packaging variants first
+      const { error: pkgError } = await window.dbClient.from('product_packaging').delete().eq('product_id', id);
+      if (pkgError) {
+        console.warn('Warning deleting packaging variants for product ' + id + ':', pkgError);
+      }
+
+      // 2. Delete the product
       const { error } = await window.dbClient.from('products').delete().eq('id', id);
       if (error) throw error;
       
-      APP.showToast('Product deleted!', 'success');
+      APP.showToast('Product and packaging variants deleted!', 'success');
       setTimeout(() => loadProducts(), 100);
     } catch (err) {
       console.error(err);
@@ -1092,11 +1157,8 @@ async function deleteProduct(id) {
 }
 
 async function deletePackagingGroup(productId) {
-  if (confirm('Delete all packaging variants for this product?')) {
+  APP.showConfirm('Delete all packaging variants for this product?', async () => {
     try {
-      const p = allProducts.find(x => x.id === productId);
-      if (!p) return;
-      
       const { error } = await window.dbClient.from('product_packaging').delete().eq('product_id', productId);
       if (error) throw error;
 
@@ -1106,7 +1168,7 @@ async function deletePackagingGroup(productId) {
       console.error(err);
       APP.showToast('Error deleting packaging variants: ' + err.message, 'error');
     }
-  }
+  });
 }
 
 function goToProductStep(step) {

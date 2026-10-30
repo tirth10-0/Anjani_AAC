@@ -23,9 +23,12 @@ async function loadTransactions() {
     await DB.initDB();
 
     // High performance: fetch accounts and transactions simultaneously in a single parallel round-trip
+    const accQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('accounts').select('*').order('name')) : window.dbClient.from('accounts').select('*').order('name');
+    const txnQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('transactions').select('*').order('id', { ascending: false })) : window.dbClient.from('transactions').select('*').order('id', { ascending: false });
+
     const [accRes, txnRes] = await Promise.all([
-      window.dbClient.from('accounts').select('*').order('name'),
-      window.dbClient.from('transactions').select('*').order('id', { ascending: false })
+      accQuery,
+      txnQuery
     ]);
 
     if (accRes.error) throw accRes.error;
@@ -85,7 +88,7 @@ function populateAccountDropdowns() {
   if (filterSelect) {
     const curVal = filterSelect.value;
     filterSelect.innerHTML = '<option value="">All Accounts</option>' + 
-      allAccounts.map(a => `<option value="${a.id}" ${curVal == a.id ? 'selected' : ''}>${a.name} (₹${(a.net_balance || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})})</option>`).join('');
+      allAccounts.map(a => `<option value="${a.id}" ${curVal == a.id ? 'selected' : ''}>${a.name} (${UTILS.fmtCurrency(a.net_balance || 0)})</option>`).join('');
   }
 
   const formSelect = document.getElementById('txn-account-select');
@@ -96,17 +99,14 @@ function populateAccountDropdowns() {
   }
 }
 
-function renderTable(data) {
+let txnTableEnhancer = null;
+
+function renderTxnSlice(data) {
   const tbody = document.querySelector('#txn-table tbody');
   if (!tbody) return;
-  document.getElementById('total-info').textContent = `${data.length} transaction${data.length !== 1 ? 's' : ''}`;
-  if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><span aria-hidden="true" style="font-size:28px;font-weight:800;line-height:1;color:var(--accent)">₹</span><h3>No transactions</h3><p>Record your first payment or receipt.</p></div></td></tr>`;
-    return;
-  }
   tbody.innerHTML = data.map(t => `<tr>
     <td>${UTILS.fmtDate(t.date)}</td>
-    <td><span class="badge ${t.type === 'Receipt' ? 'badge-success' : 'badge-danger'}">${t.type}</span></td>
+    <td><span class="badge ${t.type === 'Receipt' ? 'badge-success' : 'badge-danger'}"><span class="badge-dot"></span>${t.type}</span></td>
     <td><span style="font-weight: 500; color: var(--text-primary);">${t.account_name || '—'}</span></td>
     <td class="cell-mono">${t.ref_no || '—'}</td>
     <td class="cell-bold">${t.party_name || '—'}</td>
@@ -118,6 +118,35 @@ function renderTable(data) {
     </div></td>
   </tr>`).join('');
   UTILS.applyMobileTableLabels('txn-table');
+}
+
+function renderTable(data) {
+  const tbody = document.querySelector('#txn-table tbody');
+  if (!tbody) return;
+  const countEl = document.getElementById('total-info');
+  if (countEl) countEl.textContent = `${data.length} transaction${data.length !== 1 ? 's' : ''}`;
+  if (!data.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="9" class="empty-cell"><div class="empty-state"><span aria-hidden="true" style="font-size:28px;font-weight:800;line-height:1;color:var(--accent)">₹</span><h3>No transactions</h3><p>Record your first payment or receipt.</p></div></td></tr>`;
+    const pag = document.querySelector('#txn-table-wrap .pagination');
+    if (pag) pag.style.display = 'none';
+    return;
+  }
+
+  if (window.TableEnhancer) {
+    if (!txnTableEnhancer) {
+      txnTableEnhancer = new window.TableEnhancer({
+        tableId: 'txn-table',
+        pageSize: 25,
+        defaultSortKey: 'id',
+        defaultSortOrder: 'desc',
+        onRender: (pageSlice) => renderTxnSlice(pageSlice)
+      });
+    }
+    txnTableEnhancer.setData(data);
+    return;
+  }
+
+  renderTxnSlice(data.slice(0, 50));
 }
 
 function renderSummary(data) {
@@ -230,9 +259,10 @@ async function saveTxn() {
       if (error) throw error;
       APP.showToast('Transaction updated!', 'success');
     } else {
+      const stampedPayload = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(payload) : payload;
       const { error } = await window.dbClient
         .from('transactions')
-        .insert([payload]);
+        .insert([stampedPayload]);
       if (error) throw error;
       APP.showToast('Transaction recorded!', 'success');
     }
@@ -345,7 +375,7 @@ function renderAccountsTable() {
   if (!tbody) return;
 
   if (allAccounts.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">No accounts found. Add your first account.</div></td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6" class="empty-cell"><div class="empty-state">No accounts found. Add your first account.</div></td></tr>';
     return;
   }
 
@@ -383,20 +413,29 @@ function filterByAccount(accountId) {
 
 function switchTab(tab) {
   const tabLedger = document.getElementById('tab-ledger');
+  const tabGl = document.getElementById('tab-general-ledger');
   const tabAccounts = document.getElementById('tab-accounts');
   const secLedger = document.getElementById('section-ledger');
+  const secGl = document.getElementById('section-general-ledger');
   const secAccounts = document.getElementById('section-accounts');
+
+  tabLedger?.classList.remove('active');
+  tabGl?.classList.remove('active');
+  tabAccounts?.classList.remove('active');
+  if (secLedger) secLedger.style.display = 'none';
+  if (secGl) secGl.style.display = 'none';
+  if (secAccounts) secAccounts.style.display = 'none';
 
   if (tab === 'ledger') {
     tabLedger?.classList.add('active');
-    tabAccounts?.classList.remove('active');
     if (secLedger) secLedger.style.display = 'block';
-    if (secAccounts) secAccounts.style.display = 'none';
     loadTransactions();
+  } else if (tab === 'general-ledger') {
+    tabGl?.classList.add('active');
+    if (secGl) secGl.style.display = 'block';
+    loadGeneralLedger();
   } else if (tab === 'accounts') {
-    tabLedger?.classList.remove('active');
     tabAccounts?.classList.add('active');
-    if (secLedger) secLedger.style.display = 'none';
     if (secAccounts) secAccounts.style.display = 'block';
     loadAccounts();
   }
@@ -448,9 +487,10 @@ async function saveAccount() {
       if (error) throw error;
       APP.showToast('Account updated!', 'success');
     } else {
+      const stampedAccount = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(payload) : payload;
       const { error } = await window.dbClient
         .from('accounts')
-        .insert([payload]);
+        .insert([stampedAccount]);
       if (error) throw error;
       APP.showToast('Account created!', 'success');
     }
@@ -484,6 +524,305 @@ async function deleteAccount(id) {
   });
 }
 
+// Event Listeners with Debounce
+const debouncedApplyFilters = (typeof UTILS !== 'undefined' && UTILS.debounce) ? UTILS.debounce(applyFilters, 250) : applyFilters;
+document.getElementById('search-input')?.addEventListener('input', debouncedApplyFilters);
+document.getElementById('type-filter')?.addEventListener('change', applyFilters);
+document.getElementById('account-filter')?.addEventListener('change', applyFilters);
+
+// --- GENERAL LEDGER (DOUBLE-ENTRY) & LINKING MANAGEMENT ---
+let allGlEntries = [];
+let pendingPurchasesList = [];
+let pendingOrdersList = [];
+
+async function loadGeneralLedger() {
+  try {
+    const glTbody = document.getElementById('gl-tbody');
+    if (glTbody) glTbody.innerHTML = '<tr><td colspan="9" class="text-center" style="padding:2rem;">Loading double-entry journal...</td></tr>';
+
+    const companyId = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.getActiveCompanyId() : 1;
+
+    // Load from DB if possible
+    if (window.dbClient) {
+      try {
+        const { data: dbGl } = await window.dbClient.from('general_ledger').select('*').eq('company_id', companyId).order('id', { ascending: false });
+        if (Array.isArray(dbGl) && dbGl.length > 0) {
+          dbGl.forEach(item => {
+            if (window.ACCOUNTING_CORE && !window.ACCOUNTING_CORE.getLedgerEntries().some(e => e.entry_no === item.entry_no)) {
+              window.ACCOUNTING_CORE.getLedgerEntries().push(item);
+            }
+          });
+        }
+      } catch (e) {}
+    }
+    // Clean-slate: do not insert mock fallback entries if ledger is empty
+
+    if (window.ACCOUNTING_CORE) {
+      allGlEntries = window.ACCOUNTING_CORE.getLedgerEntries({ companyId });
+      const tb = window.ACCOUNTING_CORE.getTrialBalance(companyId);
+
+      const dEl = document.getElementById('gl-total-debits');
+      const cEl = document.getElementById('gl-total-credits');
+      const sEl = document.getElementById('gl-balance-status');
+      const diffEl = document.getElementById('gl-diff-text');
+
+      if (dEl) dEl.textContent = UTILS.fmtCurrency(tb.totalDebits);
+      if (cEl) cEl.textContent = UTILS.fmtCurrency(tb.totalCredits);
+      if (sEl) {
+        sEl.textContent = tb.isBalanced ? 'Balanced (0.00 Diff)' : `Discrepancy: ${UTILS.fmtCurrency(tb.difference)}`;
+        sEl.style.color = tb.isBalanced ? '#10B981' : '#EF4444';
+      }
+      if (diffEl) {
+        diffEl.textContent = tb.isBalanced ? 'Debits equal Credits (Double-Entry Validated)' : 'Investigation required: Debits do not match Credits';
+      }
+    }
+
+    applyGlFilters();
+  } catch (err) {
+    console.error('loadGeneralLedger error:', err);
+  }
+}
+
+function applyGlFiltersReal() {
+  const q = (document.getElementById('gl-search-input')?.value || '').toLowerCase().trim();
+  const type = document.getElementById('gl-type-filter')?.value || '';
+
+  let list = allGlEntries;
+  if (type) {
+    if (type === 'reversal') {
+      list = list.filter(e => e.is_reversal || e.ref_type.includes('reversal'));
+    } else {
+      list = list.filter(e => e.ref_type === type);
+    }
+  }
+  if (q) {
+    list = list.filter(e => 
+      `${e.entry_no} ${e.ref_type} ${e.ref_no || ''} ${e.debit_account_code} ${e.debit_account_name} ${e.credit_account_code} ${e.credit_account_name} ${e.party_name || ''} ${e.notes || ''}`
+        .toLowerCase()
+        .includes(q)
+    );
+  }
+
+  renderGlTable(list);
+}
+
+const applyGlFilters = (typeof UTILS !== 'undefined' && UTILS.debounce) 
+  ? UTILS.debounce(applyGlFiltersReal, 250) 
+  : applyGlFiltersReal;
+
+let glTableEnhancer = null;
+
+function renderGlSlice(list) {
+  const tbody = document.getElementById('gl-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = list.map(e => {
+    const isRev = e.is_reversal === true;
+    const isReversed = allGlEntries.some(x => x.reversed_entry_id === e.id);
+    let statusText = 'Posted';
+    if (isRev) statusText = 'Compensating Reversal';
+    else if (isReversed) statusText = 'Reversed';
+    const statusBadge = (typeof UTILS !== 'undefined' && UTILS.statusBadge)
+      ? UTILS.statusBadge(statusText, true)
+      : `<span class="badge ${isReversed ? 'badge-danger' : (isRev ? 'badge-warning' : 'badge-success')}"><span class="badge-dot"></span>${statusText}</span>`;
+
+    return `
+      <tr>
+        <td style="white-space:nowrap;">${UTILS.fmtDate(e.date)}</td>
+        <td class="cell-mono font-bold">${e.entry_no}</td>
+        <td>
+          <span class="badge badge-gray" style="text-transform:capitalize;">${(e.ref_type || '').replace(/_/g, ' ')}</span>
+          <div style="font-size:11px; color:var(--text-muted);">${e.ref_no || '—'}</div>
+        </td>
+        <td>
+          <div class="font-bold text-primary">${e.debit_account_code}</div>
+          <div style="font-size:11px; color:var(--text-secondary);">${e.debit_account_name}</div>
+        </td>
+        <td>
+          <div class="font-bold text-success">${e.credit_account_code}</div>
+          <div style="font-size:11px; color:var(--text-secondary);">${e.credit_account_name}</div>
+        </td>
+        <td class="cell-bold">${e.party_name || '—'}</td>
+        <td class="cell-amount font-bold">${UTILS.fmtCurrency(e.amount)}</td>
+        <td>${statusBadge}</td>
+        <td>
+          ${(!isRev && !isReversed) ? `
+            <button class="btn btn-sm btn-secondary" onclick="openReversalModal(${e.id})" title="Traceable Reversal" style="padding:3px 8px; font-size:11px; color:#EF4444; border-color:rgba(239,68,68,0.3);">
+              Reverse
+            </button>
+          ` : '<span style="font-size:11px; color:var(--text-muted);">Immutable</span>'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  if (typeof UTILS !== 'undefined' && UTILS.applyMobileTableLabels) {
+    UTILS.applyMobileTableLabels('gl-table');
+  }
+}
+
+function renderGlTable(list) {
+  const tbody = document.getElementById('gl-tbody');
+  const countEl = document.getElementById('gl-total-info');
+  if (countEl) countEl.textContent = `${list.length} journal entr${list.length === 1 ? 'y' : 'ies'}`;
+  if (!tbody) return;
+
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="9" class="empty-cell"><div class="empty-state"><h3>No journal entries</h3><p>Recorded transactions and operations will generate double-entry journals here.</p></div></td></tr>';
+    const pag = document.querySelector('#gl-table-wrap .pagination');
+    if (pag) pag.style.display = 'none';
+    return;
+  }
+
+  if (window.TableEnhancer) {
+    if (!glTableEnhancer) {
+      glTableEnhancer = new window.TableEnhancer({
+        tableId: 'gl-table',
+        pageSize: 25,
+        defaultSortKey: 'id',
+        defaultSortOrder: 'desc',
+        onRender: (pageSlice) => renderGlSlice(pageSlice)
+      });
+    }
+    glTableEnhancer.setData(list);
+    return;
+  }
+
+  renderGlSlice(list.slice(0, 50));
+}
+
+function openReversalModal(entryId) {
+  const e = allGlEntries.find(x => x.id === entryId);
+  if (!e) return;
+  document.getElementById('reversal-entry-id').value = e.id;
+  document.getElementById('reversal-entry-target').value = `${e.entry_no} (${e.ref_type.replace(/_/g, ' ')} - ${UTILS.fmtCurrency(e.amount)})`;
+  document.getElementById('reversal-reason').value = '';
+  APP.openModal('reversal-modal');
+}
+
+async function executeTraceableReversal() {
+  const entryId = parseInt(document.getElementById('reversal-entry-id').value, 10);
+  const reason = (document.getElementById('reversal-reason').value || '').trim();
+  if (!reason) {
+    APP.showToast('Please specify a valid reason for reversing this financial entry.', 'error');
+    return;
+  }
+
+  try {
+    if (window.ACCOUNTING_CORE) {
+      const rev = window.ACCOUNTING_CORE.reverseEntry(entryId, reason, 'accountant@afield.local');
+      if (window.AUDIT_LOGGER) {
+        await window.AUDIT_LOGGER.logFinancialAdjustment({
+          entryId: rev.id,
+          entryNo: rev.entry_no,
+          adjustmentType: 'TRANSACTION_REVERSAL',
+          amount: rev.amount,
+          reason,
+          beforeValues: { status: 'Posted' },
+          afterValues: { status: 'Reversed', reversal_entry_no: rev.entry_no }
+        });
+      }
+      APP.showToast(`Compensating reversal ${rev.entry_no} posted successfully!`, 'success');
+      APP.closeModal('reversal-modal');
+      await loadGeneralLedger();
+    }
+  } catch (err) {
+    console.error('Reversal error:', err);
+    APP.showToast('Failed to reverse entry: ' + err.message, 'error');
+  }
+}
+
+async function onTxnLinkTypeChange() {
+  const type = document.getElementById('txn-link-type')?.value;
+  const wrap = document.getElementById('txn-linked-doc-wrap');
+  const sel = document.getElementById('txn-linked-doc-select');
+  const label = document.getElementById('txn-linked-doc-label');
+  if (!wrap || !sel) return;
+
+  if (!type) {
+    wrap.style.display = 'none';
+    sel.innerHTML = '<option value="">Select Document...</option>';
+    return;
+  }
+
+  wrap.style.display = 'block';
+  sel.innerHTML = '<option value="">Loading documents...</option>';
+
+  const companyId = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.getActiveCompanyId() : 1;
+
+  if (type === 'purchase') {
+    label.textContent = 'Select Supplier Purchase Bill';
+    try {
+      let q = window.dbClient ? window.dbClient.from('purchases').select('id, purchase_no, supplier_name, total_amount, paid_amount, status').order('id', { ascending: false }) : null;
+      if (q && window.TENANT_CONTEXT) q = window.TENANT_CONTEXT.filter(q);
+      const res = q ? await q : { data: [] };
+      pendingPurchasesList = res.data || [];
+      if (pendingPurchasesList.length === 0) {
+        sel.innerHTML = '<option value="">No purchase bills found</option>';
+      } else {
+        sel.innerHTML = '<option value="">Select Purchase Bill...</option>' + 
+          pendingPurchasesList.map(p => {
+            const due = (parseFloat(p.total_amount) || 0) - (parseFloat(p.paid_amount) || 0);
+            return `<option value="${p.id}">${p.purchase_no || 'PO-' + p.id} - ${p.supplier_name || 'Vendor'} (Due: ${due > 0 ? UTILS.fmtCurrency(due) : '₹0.00'})</option>`;
+          }).join('');
+      }
+    } catch (e) {
+      sel.innerHTML = '<option value="">Failed to load purchases</option>';
+    }
+  } else if (type === 'order') {
+    label.textContent = 'Select Customer Sales Order / Invoice';
+    try {
+      let q = window.dbClient ? window.dbClient.from('orders').select('id, order_no, client_name, total_amount, paid_amount, status').order('id', { ascending: false }) : null;
+      if (q && window.TENANT_CONTEXT) q = window.TENANT_CONTEXT.filter(q);
+      const res = q ? await q : { data: [] };
+      pendingOrdersList = res.data || [];
+      if (pendingOrdersList.length === 0) {
+        sel.innerHTML = '<option value="">No sales orders found</option>';
+      } else {
+        sel.innerHTML = '<option value="">Select Sales Order...</option>' + 
+          pendingOrdersList.map(o => {
+            const due = (parseFloat(o.total_amount) || 0) - (parseFloat(o.paid_amount) || 0);
+            return `<option value="${o.id}">${o.order_no || 'ORD-' + o.id} - ${o.client_name || 'Client'} (Due: ${due > 0 ? UTILS.fmtCurrency(due) : '₹0.00'})</option>`;
+          }).join('');
+      }
+    } catch (e) {
+      sel.innerHTML = '<option value="">Failed to load orders</option>';
+    }
+  }
+}
+
+function onLinkedDocSelectChange() {
+  const linkType = document.getElementById('txn-link-type')?.value;
+  const docId = document.getElementById('txn-linked-doc-select')?.value;
+  if (!docId) return;
+
+  const partyInp = document.getElementById('txn-party-name');
+  const refInp = document.querySelector('input[name="ref_no"]');
+  const amtInp = document.querySelector('input[name="amount"]');
+
+  if (linkType === 'purchase') {
+    const p = pendingPurchasesList.find(x => String(x.id) === String(docId));
+    if (p) {
+      if (partyInp) partyInp.value = p.supplier_name || '';
+      if (refInp) refInp.value = p.purchase_no || ('PO-' + p.id);
+      const due = (parseFloat(p.total_amount) || 0) - (parseFloat(p.paid_amount) || 0);
+      if (amtInp && due > 0) amtInp.value = due;
+      const typeSelect = document.getElementById('txn-type-select');
+      if (typeSelect) typeSelect.value = 'Payment';
+    }
+  } else if (linkType === 'order') {
+    const o = pendingOrdersList.find(x => String(x.id) === String(docId));
+    if (o) {
+      if (partyInp) partyInp.value = o.client_name || '';
+      if (refInp) refInp.value = o.order_no || ('ORD-' + o.id);
+      const due = (parseFloat(o.total_amount) || 0) - (parseFloat(o.paid_amount) || 0);
+      if (amtInp && due > 0) amtInp.value = due;
+      const typeSelect = document.getElementById('txn-type-select');
+      if (typeSelect) typeSelect.value = 'Receipt';
+    }
+  }
+}
+
 // Event Listeners
 document.getElementById('search-input')?.addEventListener('input', applyFilters);
 document.getElementById('type-filter')?.addEventListener('change', applyFilters);
@@ -501,5 +840,13 @@ window.editAccount = editAccount;
 window.saveAccount = saveAccount;
 window.deleteAccount = deleteAccount;
 window.filterByAccount = filterByAccount;
+
+window.loadGeneralLedger = loadGeneralLedger;
+window.applyGlFilters = applyGlFilters;
+window.renderGlTable = renderGlTable;
+window.openReversalModal = openReversalModal;
+window.executeTraceableReversal = executeTraceableReversal;
+window.onTxnLinkTypeChange = onTxnLinkTypeChange;
+window.onLinkedDocSelectChange = onLinkedDocSelectChange;
 
 loadTransactions();

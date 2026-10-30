@@ -26,7 +26,9 @@ function getLocalItemStock(id) {
 
 function formatInventoryOption(item) {
   const stock = getLocalItemStock(item.id);
-  return `${item.name} (${item.category || 'Item'} | ${item.unit || 'Unit'} | Stock: ${UTILS.fmtNumber(stock)})`;
+  const cName = (typeof UTILS !== 'undefined' && UTILS.cleanItemName) ? UTILS.cleanItemName(item.name) : item.name;
+  const cUnit = (typeof UTILS !== 'undefined' && UTILS.cleanUnitLabel) ? UTILS.cleanUnitLabel(item.unit || 'Unit') : (item.unit || 'Unit');
+  return `${cName} (${item.category || 'Item'} | ${cUnit} | Stock: ${UTILS.fmtNumber(stock)})`;
 }
 
 function getAllowedUnits(baseUnit) {
@@ -43,7 +45,7 @@ function buildMaterialSummary(materials) {
   if (!Array.isArray(materials) || !materials.length) return 'No materials recorded';
   return materials
     .slice(0, 3)
-    .map(m => `<span class="purchase-item-tag"><span class="purchase-item-name">${m.item_name}</span><span class="purchase-item-qty">(${UTILS.fmtNumber(m.quantity)} ${m.unit})</span></span>`)
+    .map(m => `<span class="purchase-item-tag"><span class="purchase-item-name">${(typeof UTILS !== 'undefined' && UTILS.cleanItemName) ? UTILS.cleanItemName(m.item_name) : m.item_name}</span><span class="purchase-item-qty">(${UTILS.fmtNumber(m.quantity)} ${(typeof UTILS !== 'undefined' && UTILS.cleanUnitLabel) ? UTILS.cleanUnitLabel(m.unit) : m.unit})</span></span>`)
     .join(', ') + (materials.length > 3 ? ` <span class="purchase-item-qty">+${materials.length - 3} more</span>` : '');
 }
 
@@ -165,10 +167,14 @@ async function loadDailyTransactions() {
     await DB.initDB();
 
     // High performance: parallelize inventory_items, stock_batches, and daily_transactions
+    const invQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('inventory_items').select('*')) : window.dbClient.from('inventory_items').select('*');
+    const batchQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('stock_batches').select('item_id, current_qty').eq('item_type', 'Inventory').gt('current_qty', 0)) : window.dbClient.from('stock_batches').select('item_id, current_qty').eq('item_type', 'Inventory').gt('current_qty', 0);
+    const txnQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('daily_transactions').select('*').order('id', { ascending: false })) : window.dbClient.from('daily_transactions').select('*').order('id', { ascending: false });
+
     const [invRes, batchRes, txnRes] = await Promise.all([
-      window.dbClient.from('inventory_items').select('*'),
-      window.dbClient.from('stock_batches').select('item_id, current_qty').eq('item_type', 'Inventory').gt('current_qty', 0),
-      window.dbClient.from('daily_transactions').select('*').order('id', { ascending: false })
+      invQuery,
+      batchQuery,
+      txnQuery
     ]);
 
     inventoryItems = invRes.error ? [] : invRes.data || [];
@@ -496,9 +502,9 @@ function renderMaterialsList() {
       return `
         <div class="material-row">
           <div class="material-item-meta">
-            <div class="material-item-name">${item.item_name}</div>
+            <div class="material-item-name">${(typeof UTILS !== 'undefined' && UTILS.cleanItemName) ? UTILS.cleanItemName(item.item_name) : item.item_name}</div>
             <div class="material-item-sub">
-              <span>Base unit: ${item.base_unit || item.unit}</span>
+              <span>Base unit: ${(typeof UTILS !== 'undefined' && UTILS.cleanUnitLabel) ? UTILS.cleanUnitLabel(item.base_unit || item.unit) : (item.base_unit || item.unit)}</span>
             </div>
           </div>
           <div class="material-cell-category">
@@ -507,7 +513,7 @@ function renderMaterialsList() {
           </div>
           <div class="material-cell-stock">
             <span class="mobile-label">Stock</span>
-            <span style="font-weight:600; font-size:12.5px;">${UTILS.fmtNumber(stock)} ${item.base_unit || item.unit}</span>
+            <span style="font-weight:600; font-size:12.5px;">${UTILS.fmtNumber(stock)} ${(typeof UTILS !== 'undefined' && UTILS.cleanUnitLabel) ? UTILS.cleanUnitLabel(item.base_unit || item.unit) : (item.base_unit || item.unit)}</span>
           </div>
           <div class="material-cell-qty">
             <span class="mobile-label">Quantity</span>
@@ -597,7 +603,8 @@ async function saveTransaction() {
       const { error } = await window.dbClient.from('daily_transactions').update(payload).eq('id', editingDailyTransactionId);
       if (error) throw error;
     } else {
-      const { data, error } = await window.dbClient.from('daily_transactions').insert([payload]).select();
+      const stampedPayload = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(payload) : payload;
+      const { data, error } = await window.dbClient.from('daily_transactions').insert([stampedPayload]).select();
       if (error) throw error;
       txnId = data[0].id;
     }
@@ -613,7 +620,8 @@ async function saveTransaction() {
     }));
 
     if (newMats.length > 0) {
-      await window.dbClient.from('daily_transaction_materials').insert(newMats);
+      const stampedMats = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(newMats) : newMats;
+      await window.dbClient.from('daily_transaction_materials').insert(stampedMats);
       
       // Deduct stock in stock_batches with unit conversion to base unit
       for (const m of newMats) {

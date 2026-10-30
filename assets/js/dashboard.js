@@ -19,6 +19,12 @@ async function loadDashboard() {
     await DB.initDB();
 
     // High performance: 5 parallel queries with 0 duplicate requests
+    const ordersQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('orders').select('id, order_no, client_name, date, total_amount, status').order('date', { ascending: false })) : window.dbClient.from('orders').select('id, order_no, client_name, date, total_amount, status').order('date', { ascending: false });
+    const purchasesQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('purchases').select('date, total_amount')) : window.dbClient.from('purchases').select('date, total_amount');
+    const expensesQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('expenses').select('amount')) : window.dbClient.from('expenses').select('amount');
+    const invQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('inventory_items').select('id, name, unit, reorder_level, category, item_subtype, stock')) : window.dbClient.from('inventory_items').select('id, name, unit, reorder_level, category, item_subtype, stock');
+    const batchQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('stock_batches').select('item_id, current_qty, purchase_price').eq('item_type', 'Inventory')) : window.dbClient.from('stock_batches').select('item_id, current_qty, purchase_price').eq('item_type', 'Inventory');
+
     const [
       ordersRes,
       purchasesRes,
@@ -26,11 +32,11 @@ async function loadDashboard() {
       invRes,
       batchRes
     ] = await Promise.all([
-      window.dbClient.from('orders').select('id, order_no, client_name, date, total_amount, status').order('date', { ascending: false }),
-      window.dbClient.from('purchases').select('date, total_amount'),
-      window.dbClient.from('expenses').select('amount'),
-      window.dbClient.from('inventory_items').select('id, name, unit, reorder_level, category, item_subtype, stock'),
-      window.dbClient.from('stock_batches').select('item_id, current_qty, purchase_price').eq('item_type', 'Inventory')
+      ordersQuery,
+      purchasesQuery,
+      expensesQuery,
+      invQuery,
+      batchQuery
     ]);
 
     const allOrders = ordersRes.data || [];
@@ -122,7 +128,9 @@ async function loadDashboard() {
       if (costMap[p.id] && costMap[p.id].totalQty > 0) {
         cost = costMap[p.id].totalCost / costMap[p.id].totalQty;
       }
-      return { ...p, stock: batchStock, val: batchStock * cost };
+      const cName = (typeof UTILS !== 'undefined' && UTILS.cleanItemName) ? UTILS.cleanItemName(p.name) : (p.name || '');
+      const cUnit = (typeof UTILS !== 'undefined' && UTILS.cleanUnitLabel) ? UTILS.cleanUnitLabel(p.unit || '') : (p.unit || '');
+      return { ...p, name: cName, unit: cUnit, stock: batchStock, val: batchStock * cost };
     });
 
     const techSubtypes = ['insecticide', 'herbicide', 'fungicide', 'pgr', 'solvent', 'technical'];

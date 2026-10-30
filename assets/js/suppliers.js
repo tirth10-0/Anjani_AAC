@@ -1,4 +1,4 @@
-﻿/* suppliers.js */
+/* suppliers.js */
 let allSuppliers = [], editingSupplierId = null;
 
 function updatePageDebug(text, color) {
@@ -20,7 +20,8 @@ async function loadSuppliers() {
     await DB.initDB();
     
     console.log('Suppliers: Loading suppliers from backend API...');
-    const { data: suppliersData, error } = await window.dbClient.from('suppliers').select('*').order('id', { ascending: false });
+    const supQuery = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.filter(window.dbClient.from('suppliers').select('*').order('id', { ascending: false })) : window.dbClient.from('suppliers').select('*').order('id', { ascending: false });
+    const { data: suppliersData, error } = await supQuery;
     if (error) throw error;
     allSuppliers = UTILS.sortLatestFirst(suppliersData || []);
     
@@ -110,7 +111,8 @@ async function saveSupplier() {
       const res = await window.dbClient.from('suppliers').update(d).eq('id', editingSupplierId);
       error = res.error;
     } else {
-      const res = await window.dbClient.from('suppliers').insert([d]);
+      const stamped = window.TENANT_CONTEXT ? window.TENANT_CONTEXT.stamp(d) : d;
+      const res = await window.dbClient.from('suppliers').insert([stamped]);
       error = res.error;
     }
     

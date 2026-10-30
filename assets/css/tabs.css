@@ -51,6 +51,132 @@
     flex: 0 0 auto !important;
     min-width: 0 !important;
   }
+
+  .tabs.orders-tabs,
+  .orders-tabs {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: visible !important;
+    padding-bottom: 4px !important;
+    margin-bottom: 14px !important;
+  }
+  .tabs.orders-tabs .tab-btn,
+  .orders-tabs .tab-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    white-space: normal !important;
+    text-align: center !important;
+    min-height: 44px !important;
+    height: auto !important;
+    padding: 8px 10px !important;
+    line-height: 1.25 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    flex: none !important;
+  }
+
+  /* ── Intercompany & Transactions 3-Tab Responsive Grid ── */
+  .tabs.intercompany-tabs,
+  .intercompany-tabs,
+  .tabs.transactions-tabs,
+  #transactions-tabs,
+  .transactions-tabs {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: visible !important;
+    padding-bottom: 4px !important;
+    margin-bottom: 16px !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+
+  .tabs.intercompany-tabs .tab-btn,
+  .intercompany-tabs .tab-btn,
+  .tabs.transactions-tabs .tab-btn,
+  #transactions-tabs .tab-btn,
+  .transactions-tabs .tab-btn,
+  .tabs.transactions-tabs .btn-tab,
+  #transactions-tabs .btn-tab,
+  .transactions-tabs .btn-tab {
+    width: 100% !important;
+    min-width: 0 !important;
+    white-space: normal !important;
+    text-align: center !important;
+    min-height: 42px !important;
+    height: auto !important;
+    padding: 8px 10px !important;
+    line-height: 1.25 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    box-sizing: border-box !important;
+    flex: none !important;
+  }
+
+  /* 3rd tab spans full width across row 2 */
+  .tabs.intercompany-tabs .tab-btn:nth-child(3),
+  .intercompany-tabs .tab-btn:nth-child(3),
+  .tabs.transactions-tabs #tab-general-ledger,
+  #transactions-tabs #tab-general-ledger {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 960px) {
+  .tabs.intercompany-tabs,
+  .intercompany-tabs,
+  .tabs.transactions-tabs,
+  #transactions-tabs,
+  .transactions-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 10px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-bottom: 20px !important;
+  }
+
+  .tabs.intercompany-tabs .tab-btn,
+  .intercompany-tabs .tab-btn,
+  .tabs.transactions-tabs .tab-btn,
+  #transactions-tabs .tab-btn,
+  .transactions-tabs .tab-btn,
+  .tabs.transactions-tabs .btn-tab,
+  #transactions-tabs .btn-tab,
+  .transactions-tabs .btn-tab {
+    width: 100% !important;
+    min-width: 0 !important;
+    text-align: center !important;
+    justify-content: center !important;
+    display: flex !important;
+    align-items: center !important;
+    font-size: 13px !important;
+    padding: 9px 12px !important;
+    box-sizing: border-box !important;
+  }
+}
+
+@media (min-width: 961px) {
+  .tabs.intercompany-tabs,
+  .intercompany-tabs,
+  .tabs.transactions-tabs,
+  #transactions-tabs,
+  .transactions-tabs {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+    overflow-x: visible !important;
+  }
 }
 
 .tab-btn:hover {

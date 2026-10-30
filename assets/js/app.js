@@ -1,19 +1,61 @@
+// Immediate company branding normalization
+(function() {
+  if (typeof localStorage !== 'undefined') {
+    const cName = localStorage.getItem('erp_active_company_name');
+    if (!cName || cName === 'Estimate' || cName === 'Afield Crop Care') {
+      localStorage.setItem('erp_active_company_name', 'Anjani Agri Care');
+    }
+    const aName = localStorage.getItem('active_company_name');
+    if (!aName || aName === 'Estimate' || aName === 'Afield Crop Care') {
+      localStorage.setItem('active_company_name', 'Anjani Agri Care');
+    }
+    const cCode = localStorage.getItem('erp_active_company_code');
+    if (!cCode || cCode === 'E' || cCode === 'ACC') {
+      localStorage.setItem('erp_active_company_code', 'AAC');
+    }
+    const aCode = localStorage.getItem('active_company_code');
+    if (!aCode || aCode === 'E' || aCode === 'ACC') {
+      localStorage.setItem('active_company_code', 'AAC');
+    }
+  }
+})();
 /* ─── app.js ──────────────────────────────────────────── */
 /* Sidebar, Topbar, Toast, Modal, Spinner, Navigation      */
 
-// Unregister stale service worker & clear cache to ensure user always gets the latest updates
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(registrations => {
-    for (let reg of registrations) {
-      reg.unregister();
+// Clean-slate reset for testing from scratch: clear stale mock/buffered data keys from localStorage
+(function() {
+  const WIPE_VERSION = 'wipe_2026_10_20_clean_slate_v5';
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('erp_last_wipe_version') !== WIPE_VERSION) {
+    const keysToRemove = [
+      'erp_system_notifications',
+      'packagingUnits',
+      'deletedPackagingUnits',
+      'erp_dispatches',
+      'erp_dispatch_items',
+      'erp_dispatch_reversals',
+      'erp_invoices',
+      'erp_intercompany_transfers',
+      'erp_intercompany_transfer_items',
+      'erp_intercompany_relationships',
+      'erp_active_company_id',
+      'erp_active_company_name',
+      'erp_active_company_code'
+    ];
+    keysToRemove.forEach(k => {
+      try { localStorage.removeItem(k); } catch (_) {}
+    });
+    try { localStorage.setItem('erp_last_wipe_version', WIPE_VERSION); } catch (_) {}
+
+    if (typeof window !== 'undefined') {
+      if (window.NOTIFICATION_SERVICE && typeof window.NOTIFICATION_SERVICE.clearAll === 'function') {
+        window.NOTIFICATION_SERVICE.clearAll();
+      }
+      if (typeof window.renderTopbarNotifications === 'function') {
+        window.renderTopbarNotifications();
+      }
     }
-  });
-}
-if ('caches' in window) {
-  caches.keys().then(names => {
-    for (let name of names) caches.delete(name);
-  });
-}
+  }
+})();
 
 // Global Auth check - Cryptographic Supabase Session Enforced
 (function() {
@@ -296,6 +338,11 @@ function openModal(id) {
   // Safety delayed scrolls to cover transition and rendering delay
   setTimeout(() => resetModalScroll(overlay), 50);
   setTimeout(() => resetModalScroll(overlay), 150);
+  setTimeout(() => {
+    if (window.UniversalSearchSelect) {
+      window.UniversalSearchSelect.initAll(overlay);
+    }
+  }, 80);
 }
 
 function closeModal(id) {
@@ -312,16 +359,13 @@ function closeModal(id) {
 }
 
 function closeModalOnOverlay(e) {
-  if (e.target.classList.contains('modal-overlay')) {
-    if (window.UniversalSearchSelect) window.UniversalSearchSelect.closeAll();
-    e.target.classList.remove('open');
-    document.body.style.overflow = '';
-    resetModalScroll(e.target);
-    
-    // Safety delayed scrolls
-    setTimeout(() => resetModalScroll(e.target), 50);
-    setTimeout(() => resetModalScroll(e.target), 150);
+  // Outside-click backdrop dismissal is permanently disabled across the entire ERP
+  // to prevent accidental data loss in data-entry pop-ups, modals, and dialogs.
+  // Modals can strictly only be closed via the explicit close (X) button, Cancel button, or form submission.
+  if (e && e.target && e.target.classList.contains('modal-overlay')) {
+    e.stopPropagation();
   }
+  return;
 }
 
 /* ── SPINNER ─────────────────────────────────────────── */
@@ -394,26 +438,91 @@ function handleLogout() {
   });
 }
 
+/* ─── DOUBLE-SUBMISSION PROTECTION ──────────────────────── */
+async function guardSubmit(btnOrEl, asyncFn) {
+  const el = typeof btnOrEl === 'string' ? document.getElementById(btnOrEl) : btnOrEl;
+  if (!el) {
+    if (typeof asyncFn === 'function') return await asyncFn();
+    return;
+  }
+
+  // Prevent duplicate trigger if already submitting
+  if (el.dataset.submitting === 'true' || el.disabled) {
+    console.warn('[APP.guardSubmit] Duplicate action blocked: transaction is already processing.');
+    return;
+  }
+
+  el.dataset.submitting = 'true';
+  setButtonLoading(el, true);
+
+  try {
+    if (typeof asyncFn === 'function') {
+      return await asyncFn();
+    }
+  } catch (err) {
+    throw err;
+  } finally {
+    delete el.dataset.submitting;
+    setButtonLoading(el, false);
+  }
+}
+
 /* ── CONFIRM DIALOG ──────────────────────────────────── */
 let confirmCallback = null;
+let confirmCancelCallback = null;
 
-function showConfirm(message, onConfirm) {
+function showConfirm(message, onConfirm, options = {}) {
+  const titleEl = document.getElementById('confirm-modal-title');
+  if (titleEl) titleEl.textContent = options.title || 'Confirm Action';
+  const okBtn = document.getElementById('confirm-ok-btn');
+  if (okBtn) {
+    okBtn.textContent = options.confirmText || 'Confirm';
+    if (options.isDanger) {
+      okBtn.style.backgroundColor = '#dc2626';
+      okBtn.style.borderColor = '#b91c1c';
+      okBtn.style.color = '#ffffff';
+    } else {
+      okBtn.style.backgroundColor = '';
+      okBtn.style.borderColor = '';
+      okBtn.style.color = '';
+    }
+  }
+  const cancelBtn = document.getElementById('confirm-cancel-btn');
+  if (cancelBtn) cancelBtn.textContent = options.cancelText || 'Cancel';
   const el = document.getElementById('confirm-message');
-  if (el) el.textContent = message;
+  if (el) el.innerHTML = message;
   confirmCallback = onConfirm;
+  confirmCancelCallback = typeof options.onCancel === 'function' ? options.onCancel : null;
   openModal('confirm-modal');
 }
 
-function handleConfirmOk() {
+async function handleConfirmOk() {
   console.log('handleConfirmOk executed. confirmCallback is:', typeof confirmCallback);
-  if (typeof confirmCallback === 'function') {
+  const cb = confirmCallback;
+  confirmCallback = null;
+  confirmCancelCallback = null;
+  closeModal('confirm-modal');
+  if (typeof cb === 'function') {
     try {
-      confirmCallback();
+      await cb();
     } catch (err) {
       console.error('Error in confirmCallback execution:', err);
     }
   }
+}
+
+function handleConfirmCancel() {
+  const cancelCb = confirmCancelCallback;
+  confirmCallback = null;
+  confirmCancelCallback = null;
   closeModal('confirm-modal');
+  if (typeof cancelCb === 'function') {
+    try {
+      cancelCb();
+    } catch (err) {
+      console.error('Error in confirmCancelCallback execution:', err);
+    }
+  }
 }
 
 function shouldAutoFormatField(field) {
@@ -637,7 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelBtn = e.target.closest('#confirm-cancel-btn');
     if (cancelBtn) {
       console.log('Confirm Cancel clicked via event delegation');
-      closeModal('confirm-modal');
+      handleConfirmCancel();
       return;
     }
     closeUserDropdown();
@@ -650,6 +759,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      const confirmOpen = document.getElementById('confirm-modal')?.classList.contains('open');
+      if (confirmOpen) {
+        handleConfirmCancel();
+      }
       document.querySelectorAll('.modal-overlay.open').forEach(m => {
         m.classList.remove('open');
         document.body.style.overflow = '';
@@ -674,7 +787,10 @@ window.APP = {
   showSpinner,
   hideSpinner,
   setButtonLoading,
+  guardSubmit,
   showConfirm,
+  handleConfirmOk,
+  handleConfirmCancel,
   openUserProfile,
   handleLogout,
   runPageLoader,
