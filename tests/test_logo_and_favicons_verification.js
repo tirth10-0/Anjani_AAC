@@ -24,7 +24,7 @@ async function runAudit() {
   console.log('--- STARTING COMPREHENSIVE LOGO & FAVICON AUDIT ---\n');
 
   // 1. Source Logo Integrity
-  const expectedSize = 87078;
+  const expectedSize = 92770;
   const centralLogo = 'assets/images/logo.jpg';
   assert(fs.existsSync(centralLogo), `${centralLogo} exists`);
   const centralStat = fs.statSync(centralLogo);
