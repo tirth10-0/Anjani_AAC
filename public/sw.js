@@ -1,6 +1,6 @@
 // Anjani Agri Care ERP - Production Service Worker
 // Cache Name with Versioning
-const CACHE_NAME = 'anjani-agri-care-erp-v3.0.0-logo';
+const CACHE_NAME = 'anjani-agri-care-erp-v3.1.0-rounded-logo';
 
 const STATIC_ASSETS = [
   './manifest.json',

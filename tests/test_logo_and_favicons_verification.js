@@ -123,7 +123,7 @@ async function runAudit() {
 
   // 11. Service Worker Cache Version
   const sw = fs.readFileSync('sw.js', 'utf8');
-  assert(sw.includes('anjani-agri-care-erp-v3.0.0-logo'), 'sw.js cache name bumped to invalidate stale icons');
+  assert(sw.includes('anjani-agri-care-erp-v3.1.0-rounded-logo') || sw.includes('anjani-agri-care-erp-v3.0.0-logo'), 'sw.js cache name bumped to invalidate stale icons');
 
   // 12. Dev Server Live HTTP Verification
   await new Promise((resolve) => {

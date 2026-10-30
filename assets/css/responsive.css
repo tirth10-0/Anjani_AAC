@@ -2287,6 +2287,8 @@ body { overflow-x: hidden; }
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    border: none !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
   }
 
   .topbar-mobile-brand .topbar-logo img {
@@ -2294,6 +2296,7 @@ body { overflow-x: hidden; }
     height: 100% !important;
     object-fit: contain !important;
     border-radius: 8px !important;
+    border: none !important;
   }
 
   .topbar-mobile-brand span,

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const TS = '1793359749461';
+const TS = '1793361500000';
 
 // 1. Root HTML files
 ['index.html', 'login.html', '404.html'].forEach(f => {
@@ -72,7 +72,7 @@ if (fs.existsSync(formIdx)) {
 ['sw.js', 'public/sw.js'].forEach(f => {
   if (!fs.existsSync(f)) return;
   let sw = fs.readFileSync(f, 'utf8');
-  sw = sw.replace(/const CACHE_NAME = '[^']*';/, `const CACHE_NAME = 'anjani-agri-care-erp-v3.0.0-logo';`);
+  sw = sw.replace(/const CACHE_NAME = '[^']*';/, `const CACHE_NAME = 'anjani-agri-care-erp-v3.1.0-rounded-logo';`);
   fs.writeFileSync(f, sw, 'utf8');
   console.log('Bumped cache in:', f);
 });
