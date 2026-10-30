@@ -25,8 +25,8 @@ const path = require('path');
 const { execSync } = require('child_process');
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = 'https://quxcvoywufjjynluntvg.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_XickYJH_8m0FTaJaT2k8TA_X2MEJSDr';
+const SUPABASE_URL = 'https://jtbettizhwwqmuyofapm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve';
 const client = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 console.log('🧪 Starting Safe Archival & Audit Preservation Comprehensive Test Suite...\n');

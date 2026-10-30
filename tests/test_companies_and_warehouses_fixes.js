@@ -73,7 +73,7 @@ console.log('  ✓ [PASS] safeDeleteCompany properly hides spinner, opens visibl
 console.log('\n--- Test Group 5: Safe Company Lifecycle in Live Database ---');
 (async () => {
   const { createClient } = require('@supabase/supabase-js');
-  const client = createClient('https://quxcvoywufjjynluntvg.supabase.co', 'sb_publishable_XickYJH_8m0FTaJaT2k8TA_X2MEJSDr');
+  const client = createClient('https://jtbettizhwwqmuyofapm.supabase.co', 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve');
 
   // Insert test company
   const testCode = 'TEST-' + Math.floor(Math.random() * 8999 + 1000);

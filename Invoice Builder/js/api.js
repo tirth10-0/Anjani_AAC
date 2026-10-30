@@ -1,7 +1,7 @@
 // ─── SUPABASE HELPER ──────────────────────────────────────────
 async function fetchDirectPublic(endpoint) {
-  const supabaseUrl = 'https://galqhecdkeskvgnxjsax.supabase.co';
-  const supabaseKey = 'sb_publishable_bSLDWrI4YHYCshblzkiKHw_04XepecY';
+  const supabaseUrl = 'https://jtbettizhwwqmuyofapm.supabase.co';
+  const supabaseKey = 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve';
   const sep = endpoint.includes('?') ? '&' : '?';
   const res = await fetch(`${supabaseUrl}/rest/v1/${endpoint}${sep}apikey=${supabaseKey}`, {
     headers: {
@@ -17,8 +17,8 @@ window.fetchDirectPublic = fetchDirectPublic;
 function getSupabaseClient() {
   if (window.dbClient) return window.dbClient;
   if (typeof window.supabase !== 'undefined' && window.supabase?.createClient) {
-    const supabaseUrl = 'https://galqhecdkeskvgnxjsax.supabase.co';
-    const supabaseKey = 'sb_publishable_bSLDWrI4YHYCshblzkiKHw_04XepecY';
+    const supabaseUrl = 'https://jtbettizhwwqmuyofapm.supabase.co';
+    const supabaseKey = 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve';
     try {
       const fetchFn = (typeof resilientFetch === 'function') ? resilientFetch : (typeof window.resilientFetch === 'function' ? window.resilientFetch : undefined);
       const opts = {

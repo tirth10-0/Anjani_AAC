@@ -1,9 +1,9 @@
 const https = require('https');
 
-const url = 'https://quxcvoywufjjynluntvg.supabase.co/rest/v1/daily_transactions?select=id&limit=1';
+const url = 'https://jtbettizhwwqmuyofapm.supabase.co/rest/v1/daily_transactions?select=id&limit=1';
 const options = {
   headers: {
-    'apikey': 'sb_publishable_XickYJH_8m0FTaJaT2k8TA_X2MEJSDr',
+    'apikey': 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve',
     'Authorization': 'Bearer sb_publishable__UaVFmqPrT2UVq_brpCeUQ_p4r63kcz'
   }
 };

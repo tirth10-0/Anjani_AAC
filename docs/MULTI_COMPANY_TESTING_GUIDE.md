@@ -8,7 +8,7 @@ This guide provides step-by-step instructions to verify the newly implemented mu
 
 Because DDL commands (`CREATE TABLE`, `ALTER TABLE`) require administrative database privileges, execute the non-destructive migration script in your Supabase dashboard:
 
-1. Open your **Supabase Dashboard**: [https://supabase.com/dashboard/project/quxcvoywufjjynluntvg](https://supabase.com/dashboard/project/quxcvoywufjjynluntvg).
+1. Open your **Supabase Dashboard**: [https://supabase.com/dashboard/project/jtbettizhwwqmuyofapm](https://supabase.com/dashboard/project/jtbettizhwwqmuyofapm).
 2. Click on the **SQL Editor** in the left sidebar.
 3. Click **New Query**.
 4. Open the migration file in your code editor:

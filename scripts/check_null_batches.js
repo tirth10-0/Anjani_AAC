@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
-const supabaseUrl = 'https://quxcvoywufjjynluntvg.supabase.co';
-const supabaseKey = 'sb_publishable_XickYJH_8m0FTaJaT2k8TA_X2MEJSDr';
+const supabaseUrl = 'https://jtbettizhwwqmuyofapm.supabase.co';
+const supabaseKey = 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve';
 const client = createClient(supabaseUrl, supabaseKey);
 
 async function checkAllNullBatches() {

@@ -1,7 +1,7 @@
 ﻿-- ==============================================================================
 -- FIX: Allow Data Saving Across All ERP Tables (Supabase RLS Fix)
 -- Run this in your Supabase SQL Editor:
--- Dashboard -> Your Project (quxcvoywufjjynluntvg) -> SQL Editor -> New Query -> Run
+-- Dashboard -> Your Project (jtbettizhwwqmuyofapm) -> SQL Editor -> New Query -> Run
 -- ==============================================================================
 
 -- 1. Disable Row Level Security on all ERP tables

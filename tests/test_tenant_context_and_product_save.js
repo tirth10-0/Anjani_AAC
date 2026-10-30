@@ -58,7 +58,7 @@ async function runTests() {
 
   // Test 5: Live DB End-to-End Product Insert & Clean
   try {
-    const supabase = createClient('https://quxcvoywufjjynluntvg.supabase.co', 'sb_publishable_XickYJH_8m0FTaJaT2k8TA_X2MEJSDr');
+    const supabase = createClient('https://jtbettizhwwqmuyofapm.supabase.co', 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve');
 
     // Attempt actual insert of product matching the user's screenshot exactly!
     const productPayload = {

@@ -68,7 +68,7 @@ async function runTests() {
 
   // Test 7: Live database check
   try {
-    const supabase = createClient('https://quxcvoywufjjynluntvg.supabase.co', 'sb_publishable_XickYJH_8m0FTaJaT2k8TA_X2MEJSDr');
+    const supabase = createClient('https://jtbettizhwwqmuyofapm.supabase.co', 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve');
     const { data: prods } = await supabase.from('products').select('id');
     const { data: pkgs } = await supabase.from('product_packaging').select('id, product_id');
     const prodIds = (prods || []).map(p => p.id);

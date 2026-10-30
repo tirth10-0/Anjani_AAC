@@ -71,8 +71,8 @@ async function runTests() {
   // TEST 4: Live Supabase Data Verification: Categories & Product Master
   // --------------------------------------------------------------------------
   console.log('[Test 4] Querying live database for products & inventory classifications...');
-  const supabaseUrl = 'https://quxcvoywufjjynluntvg.supabase.co';
-  const supabaseKey = 'sb_publishable_XickYJH_8m0FTaJaT2k8TA_X2MEJSDr';
+  const supabaseUrl = 'https://jtbettizhwwqmuyofapm.supabase.co';
+  const supabaseKey = 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve';
   const sb = createClient(supabaseUrl, supabaseKey);
 
   const { data: products, error: pErr } = await sb.from('products').select('*');

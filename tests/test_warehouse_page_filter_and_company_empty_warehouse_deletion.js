@@ -56,7 +56,7 @@ console.log('  ✓ [PASS] companies.js renders warehouse pills and safely cascad
 // 4. Live Supabase Verification: Create company with empty warehouse, then delete
 console.log('\n--- Test Group 4: Live Supabase Empty Warehouse & Company Lifecycle ---');
 (async () => {
-  const client = createClient('https://quxcvoywufjjynluntvg.supabase.co', 'sb_publishable_XickYJH_8m0FTaJaT2k8TA_X2MEJSDr');
+  const client = createClient('https://jtbettizhwwqmuyofapm.supabase.co', 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve');
 
   const rand = Math.floor(Math.random() * 8999 + 1000);
   const compCode = `TEST-EMP-${rand}`;

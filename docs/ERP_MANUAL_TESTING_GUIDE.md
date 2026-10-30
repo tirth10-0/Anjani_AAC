@@ -41,7 +41,7 @@ Before beginning the manual walkthrough, set up your inspection tools:
      and **zero red JavaScript errors**.
 4. **Network Tab:**
    * Check **Fetch/XHR** in the Network tab.
-   * When saving or querying, Supabase requests will appear as `POST`, `PATCH`, or `GET` to `quxcvoywufjjynluntvg.supabase.co`.
+   * When saving or querying, Supabase requests will appear as `POST`, `PATCH`, or `GET` to `jtbettizhwwqmuyofapm.supabase.co`.
    * Status code should always be `200 OK` or `201 Created` (never `401`, `403`, or `500`).
 
 ---

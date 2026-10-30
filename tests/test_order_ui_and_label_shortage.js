@@ -20,8 +20,8 @@ const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const BASE_URL = 'http://localhost:5174';
 const ARTIFACTS_DIR = 'C:\\Users\\tirth\\.gemini\\antigravity\\brain\\f96c51f5-083a-43ab-b2cf-e51f633b1bac';
 
-const SUPABASE_URL = 'https://quxcvoywufjjynluntvg.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_XickYJH_8m0FTaJaT2k8TA_X2MEJSDr';
+const SUPABASE_URL = 'https://jtbettizhwwqmuyofapm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_kSf8e6RD96lT40di2YqxxQ_gJ3WS6ve';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 function sleep(ms) {
